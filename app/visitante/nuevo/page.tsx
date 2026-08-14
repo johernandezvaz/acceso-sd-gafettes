@@ -15,20 +15,17 @@ import {
   CheckCircle2,
   ChevronDown,
   Download,
-  Copy,
-  Check,
 } from 'lucide-react';
 import StatusBar from '@/components/ui/StatusBar';
 import GafeteVisitante from '@/components/GafeteVisitante';
 import { SYSTEM_NAME, ROUTES } from '@/lib/constants';
 import { createVisitor, type VisitHostOption } from '@/app/actions/visitors';
 import VisitHostPicker from '@/components/ui/VisitHostPicker';
-import { generateVisitorBadgeZpl } from '@/lib/printing/visitorBadgeZpl';
 import {
-  sendToZebraBrowserPrint,
-  downloadZplFile,
-  copyZplToClipboard,
-} from '@/lib/printing/zebraPrintService';
+  printViaBrowserDialog,
+  downloadBrotherPrnFile,
+} from '@/lib/printing/brother/printer';
+import type { VisitorBadgeData } from '@/lib/printing/brother/visitorBadge';
 
 
 
@@ -88,7 +85,6 @@ export default function NuevoVisitantePage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPrinting, setIsPrinting] = useState(false);
   const [printStatus, setPrintStatus] = useState<string | null>(null);
-  const [zplCopied, setZplCopied] = useState(false);
 
   const [form, setForm] = useState<FormData>({
     company: '',
@@ -100,50 +96,30 @@ export default function NuevoVisitantePage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Partial<Record<keyof FormData, boolean>>>({});
 
-  const getBadgeZpl = () => {
-    return generateVisitorBadgeZpl({
-      folio: folioRegistro,
-      nombre: form.fullName,
-      empresa: form.company,
-      visitaA: visitaALabel,
-      motivo: form.reason,
-      identificacion: form.idType,
-      fechaHora: fechaRegistro || new Date().toISOString(),
-    });
-  };
+  const getVisitorData = (): VisitorBadgeData => ({
+    folio: folioRegistro,
+    nombre: form.fullName,
+    empresa: form.company,
+    visitaA: visitaALabel,
+    motivo: form.reason,
+    identificacion: form.idType,
+    fechaHora: fechaRegistro || new Date().toISOString(),
+  });
 
-  const handleImprimirZebra = async () => {
-    const zpl = getBadgeZpl();
+  const handleImprimirBrother = async () => {
     setIsPrinting(true);
-    setPrintStatus('Enviando a impresora Zebra...');
-
-    const res = await sendToZebraBrowserPrint(zpl);
+    setPrintStatus('Abriendo diálogo de impresión para Brother QL-810W...');
+    await printViaBrowserDialog();
     setIsPrinting(false);
-
-    if (res.success) {
-      setPrintStatus('¡Gafete impreso correctamente!');
-      setTimeout(() => router.push(ROUTES.home), 1200);
-    } else {
-      downloadZplFile(zpl, `gafete-${folioRegistro || 'visitante'}.zpl`);
-      setPrintStatus('Archivo .ZPL descargado (Zebra Browser Print no detectado en el equipo local)');
-    }
+    setPrintStatus('Listo para imprimir en Brother QL-810W');
   };
 
-  const handleDescargarZpl = () => {
-    const zpl = getBadgeZpl();
-    downloadZplFile(zpl, `gafete-${folioRegistro || 'visitante'}.zpl`);
-    setPrintStatus('Archivo .ZPL descargado');
+  const handleDescargarPrn = () => {
+    const data = getVisitorData();
+    downloadBrotherPrnFile(data, `gafete-brother-${folioRegistro || 'visitante'}.prn`);
+    setPrintStatus('Archivo binario .PRN (Brother Raster) descargado');
   };
 
-  const handleCopiarZpl = async () => {
-    const zpl = getBadgeZpl();
-    const ok = await copyZplToClipboard(zpl);
-    if (ok) {
-      setZplCopied(true);
-      setPrintStatus('Código ZPL copiado al portapapeles');
-      setTimeout(() => setZplCopied(false), 2500);
-    }
-  };
 
   const handleChange = (field: keyof FormData, value: string) => {
     const newForm = { ...form, [field]: value };
@@ -404,8 +380,8 @@ export default function NuevoVisitantePage() {
             <span className="text-xs uppercase tracking-widest text-emerald-400 font-bold bg-emerald-950/70 border border-emerald-500/30 px-3 py-1 rounded-full">
               Registro completado
             </span>
-            <h3 className="text-white text-xl font-bold mt-2">Gafete de visitante (ZPL)</h3>
-            <p className="text-slate-300 text-xs mt-0.5">Formato Zebra 84.5 × 53 mm</p>
+            <h3 className="text-white text-xl font-bold mt-2">Gafete de visitante</h3>
+            <p className="text-slate-300 text-xs mt-0.5">Brother QL-810W · 53 × 84.5 mm</p>
           </div>
 
           <GafeteVisitante
@@ -426,7 +402,7 @@ export default function NuevoVisitantePage() {
 
           <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-md justify-center">
             <button
-              onClick={handleImprimirZebra}
+              onClick={handleImprimirBrother}
               disabled={isPrinting}
               className="
                 flex items-center justify-center gap-2
@@ -442,11 +418,11 @@ export default function NuevoVisitantePage() {
               ) : (
                 <Printer size={18} />
               )}
-              Imprimir en Zebra
+              Imprimir gafete (Brother QL-810W)
             </button>
 
             <button
-              onClick={handleDescargarZpl}
+              onClick={handleDescargarPrn}
               className="
                 flex items-center justify-center gap-2
                 w-full sm:w-auto
@@ -455,26 +431,10 @@ export default function NuevoVisitantePage() {
                 active:scale-[0.97] transition-all
                 select-none touch-manipulation
               "
-              title="Descargar archivo .zpl para envío directo o Zebra Setup Utilities"
+              title="Descargar archivo de comandos binarios Brother Raster (.PRN)"
             >
               <Download size={15} />
-              Descargar .ZPL
-            </button>
-
-            <button
-              onClick={handleCopiarZpl}
-              className="
-                flex items-center justify-center gap-2
-                w-full sm:w-auto
-                bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold
-                px-4 py-3.5 rounded-xl text-xs border border-slate-600/60
-                active:scale-[0.97] transition-all
-                select-none touch-manipulation
-              "
-              title="Copiar código ZPL al portapapeles"
-            >
-              {zplCopied ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
-              {zplCopied ? 'Copiado' : 'Copiar ZPL'}
+              Descargar .PRN
             </button>
           </div>
 

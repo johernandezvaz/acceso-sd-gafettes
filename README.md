@@ -98,7 +98,7 @@ sistema-entrada/
 │           └── page.tsx          # Registro de personal de seguridad
 │
 ├── components/
-│   ├── GafeteVisitante.tsx       # Componente de preview de gafete (84.5x53mm)
+│   ├── GafeteVisitante.tsx       # Componente de preview de gafete Brother QL (53x84.5mm, B&W)
 │   ├── modals/
 │   │   └── RegistroGeneralModal.tsx  # Modal reutilizable entrada/salida de personal
 │   └── ui/
@@ -110,9 +110,9 @@ sistema-entrada/
 ├── lib/
 │   ├── constants.ts              # Constantes globales: SYSTEM_NAME, ROUTES, COLORS
 │   └── printing/
-│       ├── visitorBadgeZpl.ts    # Generador ZPL calibrado para etiquetas 84.5x53mm (203/300 DPI)
-│       ├── zebraPrintService.ts  # Servicio de transporte ZPL (Zebra Browser Print, descarga, portapapeles)
-│       └── logoData.json         # Mapas de bits monocromáticos del logo Safe Demo para ^GFA
+│       └── brother/
+│           ├── visitorBadge.ts   # Generador de comandos Brother QL Raster (53x84.5mm, 300 DPI)
+│           └── printer.ts        # Servicio de transporte (Browser Print, red TCP Wi-Fi puerto 9100, .PRN)
 │
 ├── public/
 │   ├── favicon_io/               # Iconos y manifiesto de la aplicación (favicon, apple-touch-icon, webmanifest)
@@ -306,7 +306,9 @@ Lógica: nombre completo (validado) + toggle Entrada/Salida + Toast de confirmac
 
 ### `components/GafeteVisitante.tsx`
 
-Preview visual del gafete físico adaptado a proporción real **84.5 mm × 53 mm** (landscape).
+Preview visual del gafete físico para **Brother QL-810W** (53 mm × 84.5 mm, vertical/portrait).
+
+**Esquema de color:** Estrictamente **Blanco (#FFFFFF) y Negro (#000000)**. No utiliza tonos grises, degradados ni colores secundarios.
 
 ```typescript
 Props: {
@@ -320,12 +322,12 @@ Props: {
 }
 ```
 
-Estructura idéntica al diseño ZPL (top → bottom):
-- Barra negra superior
-- Header: Logo Safe Demo + badge "VISITANTE"
-- Sección principal: Nombre + Empresa + Folio
-- Sección secundaria: Visita a + Motivo + Identificación
-- Footer: Fecha/hora (`DD/MM/YYYY · HH:mm`) + Código QR (`^BQN`)
+Estructura vertical (top → bottom):
+1. **Barra superior:** 4px negra sólida.
+2. **Header:** Logo Safe Demo (monocromático) + Badge "VISITANTE" (bloque negro con texto blanco).
+3. **Sección Principal:** Nombre (mayúsculas, bold, wrap) + Empresa + Folio (`FOLIO #000123`).
+4. **Sección Visita:** `VISITA A` (anfitrión) + `MOTIVO` + `IDENTIFICACIÓN`.
+5. **Footer:** Fecha (`DD/MM/YYYY`) y Hora (`HH:mm`) a la izquierda + Código QR a la derecha.
 
 
 ---
@@ -546,35 +548,29 @@ El control de acceso al sistema es físico/operativo (quién tiene acceso al dis
 
 ---
 
-## 13. Sistema de impresión de gafetes (ZPL / Zebra)
+## 13. Sistema de impresión de gafetes (Brother QL-810W)
 
-CODA utiliza **ZPL (Zebra Programming Language)** para imprimir los gafetes físicos directamente en impresoras térmicas Zebra compatibles.
+CODA utiliza una impresora térmica **Brother QL-810W** para la emisión física de gafetes de visitantes.
 
-### Dimensiones físicas de la etiqueta
-- **Ancho:** 84.5 mm
-- **Alto:** 53.0 mm
-- **Orientación:** Landscape (horizontal)
+> **IMPORTANTE:** La impresora oficial es **Brother QL-810W**. No se utiliza Zebra ni ZPL.
 
-### Cálculo de Dots según DPI
-La conversión milímetros a dots se calcula con:
-$$\text{dots} = \text{round}\left(\frac{\text{mm}}{25.4} \times \text{DPI}\right)$$
+### Dimensiones físicas y resolución
+- **Ancho:** 53.0 mm ($\approx 626\text{ dots}$ a 300 DPI)
+- **Alto:** 84.5 mm ($\approx 998\text{ dots}$ a 300 DPI)
+- **Orientación:** Vertical / Portrait directo
+- **Resolución:** 300 DPI estándar
+- **Color:** Monocromático binario estricto: **#000000** (Negro) y **#FFFFFF** (Blanco)
 
-| Resolución | Ancho (`^PW`) | Alto (`^LL`) | Densidad (`dpmm`) | Modelos de ejemplo |
-|---|---|---|---|---|
-| **203 DPI** (Default) | **675 dots** | **424 dots** | 8 dots/mm | Zebra ZD220, ZD230, ZD420 (203dpi), GK420d |
-| **300 DPI** | **998 dots** | **626 dots** | 12 dots/mm | Zebra ZD420-300, ZD620-300 |
-
-### Generador ZPL (`lib/printing/visitorBadgeZpl.ts`)
-- **Logo Bitmap (`^GFA`):** Convierte el logotipo oficial a mapa de bits monocromático 1-bit nítido y proporcional.
-- **Código QR Nativo (`^BQN`):** Genera código QR con modelo 2 y corrección de error M conteniendo `{ folio, nombre, empresa, fecha }`.
-- **Text Wrapping (`^FB`):** Maneja nombres o empresas largas mediante bloques de campo con control de desbordamiento.
-- **Sanitización:** Escapa caracteres de control ZPL (`^`, `~`, `\`) y maneja UTF-8 con `^CI28`.
-
-### Mecanismos de envío / Transporte ZPL (`lib/printing/zebraPrintService.ts`)
-1. **Zebra Browser Print:** Intenta comunicación directa mediante el agente oficial Zebra Browser Print (`http://127.0.0.1:9100/write`).
-2. **Descarga de archivo `.zpl`:** Descarga automática o manual del archivo de comandos para envío por USB, cola de impresión o Zebra Setup Utilities.
-3. **Copiado al Portapapeles:** Para pruebas rápidas en simuladores o envío por terminal.
-4. **Envío de red directo (opcional):** Mediante socket TCP al puerto 9100 de la impresora en red local.
+### Módulos de Impresión (`lib/printing/brother/`)
+- **`visitorBadge.ts`:** Generador del flujo de comandos binarios oficiales **Brother QL Raster (ESC/P Raster Mode)**:
+  - Inicialización limpia con 200 bytes nulos + `ESC @` + `ESC i a 1`.
+  - Configuración de medios continuos / troquelados (`ESC i z`).
+  - Renderizado de 998 líneas raster de 90 bytes (720 pines).
+  - Comando de corte automático (`ESC i M`) y finalización (`0x1A`).
+- **`printer.ts`:** Métodos de transporte:
+  1. **Controlador Nativo Kiosco:** Vía diálogo de impresión con estilos calibrados a 53 × 84.5 mm portrait.
+  2. **Socket TCP Wi-Fi (Puerto 9100):** Envío directo del buffer raster a la IP de la Brother en la red local mediante `/api/print/brother`.
+  3. **Descarga de archivo `.PRN`:** Archivo binario con comandos raster para utilidades de Brother o cola de impresión.
 
 
 ---
@@ -823,11 +819,9 @@ handleRegistrar() → validateForm() → createVisitor() en DB
        ↓
 Generación de Folio y persistencia
        ↓
-Overlay con <GafeteVisitante> (Preview 84.5 × 53 mm)
+Overlay con <GafeteVisitante> (Preview 53 × 84.5 mm Portrait, B&W)
        ↓
-generateVisitorBadgeZpl(data, { dpi: 203 })
-       ↓
-Envío ZPL (Zebra Browser Print / Descarga .ZPL / Copiar ZPL)
+Impresión Brother QL-810W (Controlador / Wi-Fi TCP 9100 / Descarga .PRN)
        ↓
 Finalizar → router.push(ROUTES.home)
 ```

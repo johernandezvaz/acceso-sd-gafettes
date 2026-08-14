@@ -36,17 +36,18 @@ body {
 @media print {
   @page {
     margin: 0;
-    size: 84.5mm 53mm landscape;
+    size: 53mm 84.5mm portrait;
   }
 
   html,
   body {
     margin: 0;
     padding: 0;
-    width: 84.5mm;
-    height: 53mm;
+    width: 53mm;
+    height: 84.5mm;
     overflow: visible !important;
-    background: white !important;
+    background: #FFFFFF !important;
+    color: #000000 !important;
   }
 
   body * {
@@ -58,10 +59,13 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 84.5mm;
-    height: 53mm;
-    background: white;
+    width: 53mm;
+    height: 84.5mm;
+    background: #FFFFFF;
+    color: #000000;
     display: block;
+    margin: 0;
+    padding: 0;
   }
 
   #gafete-print * {
@@ -69,12 +73,14 @@ body {
   }
 
   #gafete-print .badge-inner {
-    width: 84.5mm !important;
-    height: 53mm !important;
-    border: none !important;
+    width: 53mm !important;
+    height: 84.5mm !important;
+    border: 1px solid #000000 !important;
     border-radius: 0 !important;
     max-width: none !important;
     transform: none !important;
     box-shadow: none !important;
+    background-color: #FFFFFF !important;
+    color: #000000 !important;
   }
 }

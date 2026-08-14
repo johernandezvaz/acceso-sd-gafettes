@@ -8,7 +8,7 @@ import {
   IDENTIFICACIONES_MAP,
   formatBadgeDate,
   type VisitorBadgeData,
-} from '@/lib/printing/visitorBadgeZpl';
+} from '@/lib/printing/brother/visitorBadge';
 
 export interface GafeteVisitanteProps extends VisitorBadgeData {
   className?: string;
@@ -24,7 +24,7 @@ export default function GafeteVisitante({
   fechaHora,
   className = '',
 }: GafeteVisitanteProps) {
-  const fechaTexto = formatBadgeDate(fechaHora);
+  const dateInfo = formatBadgeDate(fechaHora);
   const motivoLabel = MOTIVOS_MAP[motivo] ?? motivo;
   const idLabel = IDENTIFICACIONES_MAP[identificacion] ?? identificacion;
 
@@ -38,160 +38,163 @@ export default function GafeteVisitante({
 
   return (
     <div id="gafete-print" className={className}>
-      {/* 
-        Contenedor del gafete ajustado a la proporción física 84.5 mm x 53 mm (ratio ~1.594)
-        Ancho preview: 380px, Alto: 238px (~1.594)
-      */}
+
       <div
         className="badge-inner"
         style={{
-          width: '380px',
-          height: '238px',
-          background: '#ffffff',
-          border: '1.5px solid #cbd5e1',
-          borderRadius: '8px',
+          width: '256px',
+          height: '408px',
+          backgroundColor: '#FFFFFF',
+          border: '1.5px solid #000000',
+          borderRadius: '4px',
           overflow: 'hidden',
           fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          color: '#0f172a',
+          color: '#000000',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
-          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
           position: 'relative',
+          boxSizing: 'border-box',
         }}
       >
-        {/* Barra superior oscura idéntica a ZPL */}
-        <div style={{ height: '5px', background: '#000000', width: '100%' }} />
 
-        {/* HEADER: Logo y Etiqueta 'VISITANTE' */}
+        <div style={{ height: '4px', backgroundColor: '#000000', width: '100%', flexShrink: 0 }} />
+
         <div
           style={{
-            padding: '8px 16px 6px',
+            padding: '6px 10px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            backgroundColor: '#FFFFFF',
+            flexShrink: 0,
           }}
         >
-          <div style={{ position: 'relative', width: '70px', height: '32px' }}>
+          <div style={{ position: 'relative', width: '56px', height: '26px' }}>
             <Image
               src="/safe-demo_logo-blc-Photoroom.png"
               alt="Safe Demo Logo"
               fill
-              sizes="70px"
-              style={{ objectFit: 'contain' }}
+              sizes="56px"
+              style={{ objectFit: 'contain', filter: 'grayscale(100%) contrast(200%)' }}
               priority
             />
           </div>
-          <span
+
+          <div
             style={{
-              fontSize: '11px',
-              fontWeight: '800',
+              backgroundColor: '#000000',
+              color: '#FFFFFF',
+              fontSize: '9.5px',
+              fontWeight: '900',
               letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              border: '1.5px solid #000000',
-              padding: '3px 10px',
-              borderRadius: '4px',
+              padding: '3px 7px',
+              borderRadius: '2px',
               lineHeight: 1,
             }}
           >
-            Visitante
-          </span>
+            VISITANTE
+          </div>
         </div>
+
+        <div style={{ height: '1px', backgroundColor: '#000000', width: '100%', flexShrink: 0 }} />
 
         <div
           style={{
-            padding: '6px 16px',
-            borderTop: '1px solid #e2e8f0',
+            padding: '8px 10px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '2px',
+            gap: '3px',
+            backgroundColor: '#FFFFFF',
+            flexShrink: 0,
           }}
         >
           <span
             style={{
-              fontSize: '14px',
-              fontWeight: '800',
+              fontSize: '13px',
+              fontWeight: '900',
               lineHeight: '1.2',
               textTransform: 'uppercase',
               color: '#000000',
-              whiteSpace: 'nowrap',
+              wordBreak: 'break-word',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
             }}
           >
             {nombre}
           </span>
           <span
             style={{
-              fontSize: '11px',
-              color: '#475569',
-              fontWeight: '500',
-              whiteSpace: 'nowrap',
+              fontSize: '10px',
+              color: '#000000',
+              fontWeight: '600',
+              wordBreak: 'break-word',
+              display: '-webkit-box',
+              WebkitLineClamp: 1,
+              WebkitBoxOrient: 'vertical',
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
             }}
           >
             {empresa}
           </span>
           <span
             style={{
-              fontSize: '11px',
-              fontWeight: '800',
+              fontSize: '10.5px',
+              fontWeight: '900',
               letterSpacing: '0.05em',
-              color: '#0f172a',
-              marginTop: '1px',
+              color: '#000000',
+              marginTop: '2px',
             }}
           >
             FOLIO #{folio}
           </span>
         </div>
 
+        <div style={{ height: '1px', backgroundColor: '#000000', width: '100%', flexShrink: 0 }} />
+
         <div
           style={{
-            padding: '5px 16px',
-            borderTop: '1px solid #e2e8f0',
+            padding: '8px 10px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '2px',
+            gap: '6px',
+            backgroundColor: '#FFFFFF',
+            flex: 1,
+            justifyContent: 'center',
           }}
         >
           {[
-            { label: 'Visita a:', value: visitaA || '—' },
-            { label: 'Motivo:', value: motivoLabel },
-            { label: 'Identificación:', value: idLabel },
+            { label: 'VISITA A', value: visitaA || '—' },
+            { label: 'MOTIVO', value: motivoLabel },
+            { label: 'IDENTIFICACIÓN', value: idLabel },
           ].map(({ label, value }) => (
-            <div
-              key={label}
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                gap: '8px',
-                alignItems: 'baseline',
-              }}
-            >
+            <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
               <span
                 style={{
-                  color: '#64748b',
-                  fontSize: '9.5px',
-                  fontWeight: '700',
+                  color: '#000000',
+                  fontSize: '8px',
+                  fontWeight: '900',
+                  letterSpacing: '0.06em',
                   textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  flexShrink: 0,
-                  width: '90px',
+                  lineHeight: 1,
                 }}
               >
                 {label}
               </span>
               <span
                 style={{
-                  fontSize: '10.5px',
-                  fontWeight: '600',
-                  color: '#1e293b',
-                  textAlign: 'left',
-                  flex: 1,
-                  whiteSpace: 'nowrap',
+                  fontSize: '10px',
+                  fontWeight: '700',
+                  color: '#000000',
+                  wordBreak: 'break-word',
+                  lineHeight: '1.2',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 1,
+                  WebkitBoxOrient: 'vertical',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis',
                 }}
               >
                 {value}
@@ -200,32 +203,61 @@ export default function GafeteVisitante({
           ))}
         </div>
 
+        <div style={{ height: '1px', backgroundColor: '#000000', width: '100%', flexShrink: 0 }} />
+
         <div
           style={{
-            padding: '6px 16px 8px',
-            borderTop: '1px solid #e2e8f0',
+            padding: '8px 10px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            background: '#fafafa',
+            backgroundColor: '#FFFFFF',
+            flexShrink: 0,
           }}
         >
-          <span
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span
+              style={{
+                fontSize: '9.5px',
+                color: '#000000',
+                fontWeight: '800',
+                letterSpacing: '0.02em',
+                lineHeight: 1.2,
+              }}
+            >
+              {dateInfo.fecha}
+            </span>
+            <span
+              style={{
+                fontSize: '11px',
+                color: '#000000',
+                fontWeight: '900',
+                letterSpacing: '0.03em',
+                lineHeight: 1.2,
+              }}
+            >
+              {dateInfo.hora}
+            </span>
+          </div>
+
+          <div
             style={{
-              fontSize: '10.5px',
-              color: '#475569',
-              fontWeight: '600',
-              letterSpacing: '0.02em',
+              padding: '2px',
+              backgroundColor: '#FFFFFF',
+              border: '1px solid #000000',
+              borderRadius: '2px',
+              flexShrink: 0,
             }}
           >
-            {fechaTexto}
-          </span>
-          <QRCodeSVG
-            value={qrData}
-            size={44}
-            level="M"
-            style={{ display: 'block', flexShrink: 0 }}
-          />
+            <QRCodeSVG
+              value={qrData}
+              size={48}
+              level="M"
+              fgColor="#000000"
+              bgColor="#FFFFFF"
+              style={{ display: 'block' }}
+            />
+          </div>
         </div>
       </div>
     </div>

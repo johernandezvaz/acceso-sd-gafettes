@@ -12,10 +12,12 @@
 lector.ipynb
 admins_entrada.csv
 LISTADO ADMIS 14 08 26.xls
+prompt.md
+AGENTS.md
+
+
 # testing
 /coverage
-prompt.md
-
 # next.js
 /.next/
 /out/
