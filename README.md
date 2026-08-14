@@ -505,14 +505,21 @@ Sin persistencia.
 3. Encontrado → estado "confirmar". No encontrado → error.
 4. Confirmar → éxito animado → auto-redirección 2.5s.
 
-### F3 — Control de llaves (`/llaves`)
+### F3 — Control de llaves (`/llaves` & `/admin/llaves`)
 
-1. Lista de 6 llaves hardcodeadas.
-2. Tomar (nombre de empleado requerido) / Devolver con confirmación.
-3. Contador disponibles/en uso/total en tiempo real.
-4. Tiempo transcurrido actualizado cada minuto.
+1. **Personas autorizadas para solicitar llaves:**
+   - Provienen exclusivamente del catálogo de **`VisitHost`** (personal autorizado importado en base de datos).
+   - Más la opción especial **`Limpieza`** (`CLEANING`) que no requiere nombres individuales ni crea personas ficticias.
+   - Si una persona no está en `VisitHost` o está inactiva (`active = false`), no puede solicitar llaves.
+2. **Flujo en el Kiosco:**
+   - Botón "Tomar" → Abre modal `<KeyRequesterPicker>` con buscador server-side y debounce.
+   - Opción destacada fija: `🧹 Limpieza`.
+   - Confirmación explícita con nombre del solicitante y nombre de la llave.
+   - Devolución con confirmación y cálculo de duración en tiempo real.
+3. **Persistencia y Auditoría:**
+   - Modelo `KeyAssignment` con `visitHostId` (nullable), `requesterType` (`PERSON` / `CLEANING`), `requesterLabel`, `takenAt` y `returnedAt`.
+   - Registro histórico en `/admin/llaves/registro` con filtros por estado, fecha, solicitante (Todos / Personas / Limpieza) y buscador inteligente.
 
-Sin persistencia.
 
 ### F4 — Personal interno y accesos especiales
 

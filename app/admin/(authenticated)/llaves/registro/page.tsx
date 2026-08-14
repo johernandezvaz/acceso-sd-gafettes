@@ -11,14 +11,13 @@ import {
   History,
   Search,
   X,
-  Calendar,
   KeyRound,
   ChevronLeft,
   ChevronRight,
   Filter,
-  User,
   ArrowLeft,
   CheckCircle2,
+  Sparkles,
 } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
 
@@ -97,6 +96,7 @@ export default function AdminRegistroLlavesPage() {
   const [appliedSearch, setAppliedSearch] = useState('')
   const [selectedKeyId, setSelectedKeyId] = useState('')
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'returned'>('all')
+  const [requesterTypeFilter, setRequesterTypeFilter] = useState<'all' | 'PERSON' | 'CLEANING'>('all')
   const [datePreset, setDatePreset] = useState<string>('todos')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -104,12 +104,10 @@ export default function AdminRegistroLlavesPage() {
   const [tick, setTick] = useState(0)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Cargar lista de llaves para el selector
   useEffect(() => {
     getKeyFilterOptions().then(setKeyOptions)
   }, [])
 
-  // Timer para refrescar duración de llaves en uso
   useEffect(() => {
     const timer = setInterval(() => setTick((t) => t + 1), 30_000)
     return () => clearInterval(timer)
@@ -119,6 +117,7 @@ export default function AdminRegistroLlavesPage() {
     search: string,
     keyId: string,
     status: 'all' | 'active' | 'returned',
+    requesterType: 'all' | 'PERSON' | 'CLEANING',
     preset: string,
     customFrom: string,
     customTo: string,
@@ -142,7 +141,8 @@ export default function AdminRegistroLlavesPage() {
       const res = await listKeyAssignmentsHistory({
         search: search.trim() || undefined,
         keyId: keyId || undefined,
-        status: status,
+        status,
+        requesterType,
         dateFrom: from,
         dateTo: to,
         page: targetPage,
@@ -159,8 +159,27 @@ export default function AdminRegistroLlavesPage() {
   }, [pageSize])
 
   useEffect(() => {
-    loadData(appliedSearch, selectedKeyId, statusFilter, datePreset, dateFrom, dateTo, page)
-  }, [loadData, appliedSearch, selectedKeyId, statusFilter, datePreset, dateFrom, dateTo, page])
+    loadData(
+      appliedSearch,
+      selectedKeyId,
+      statusFilter,
+      requesterTypeFilter,
+      datePreset,
+      dateFrom,
+      dateTo,
+      page
+    )
+  }, [
+    loadData,
+    appliedSearch,
+    selectedKeyId,
+    statusFilter,
+    requesterTypeFilter,
+    datePreset,
+    dateFrom,
+    dateTo,
+    page,
+  ])
 
   const handleSearchChange = (val: string) => {
     setSearchInput(val)
@@ -200,7 +219,7 @@ export default function AdminRegistroLlavesPage() {
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Registro de llaves</h1>
           </div>
           <p className="text-sm text-slate-500 mt-1">
-            Historial detallado de préstamos y devoluciones de llaves
+            Historial detallado de préstamos y devoluciones por personal autorizado y limpieza
           </p>
         </div>
 
@@ -213,16 +232,14 @@ export default function AdminRegistroLlavesPage() {
         </Link>
       </div>
 
-      {/* Barra de Filtros y Buscador */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4 flex flex-col gap-3 shadow-sm">
-        {/* Buscador principal */}
         <div className="relative">
           <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
             value={searchInput}
             onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Buscar por nombre de persona o nombre de llave..."
+            placeholder="Buscar por persona, departamento, número de empleado, 'limpieza' o llave..."
             className="w-full h-10 pl-10 pr-9 rounded-xl border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors"
           />
           {searchInput && (
@@ -235,14 +252,37 @@ export default function AdminRegistroLlavesPage() {
           )}
         </div>
 
-        {/* Filtros secundarios */}
         <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-slate-100 text-xs">
           <div className="flex items-center gap-1.5 text-slate-500 font-semibold uppercase tracking-wider">
             <Filter size={12} />
             Filtros:
           </div>
 
-          {/* Filtro por Llave */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-500 font-medium">Solicitante:</span>
+            <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg">
+              {[
+                { k: 'all', l: 'Todos' },
+                { k: 'PERSON', l: 'Personas' },
+                { k: 'CLEANING', l: 'Limpieza' },
+              ].map(({ k, l }) => (
+                <button
+                  key={k}
+                  onClick={() => {
+                    setRequesterTypeFilter(k as 'all' | 'PERSON' | 'CLEANING')
+                    handleFilterChange()
+                  }}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${requesterTypeFilter === k
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                  {l}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="flex items-center gap-1.5">
             <span className="text-slate-500 font-medium">Llave:</span>
             <select
@@ -262,7 +302,6 @@ export default function AdminRegistroLlavesPage() {
             </select>
           </div>
 
-          {/* Filtro por Estado */}
           <div className="flex items-center gap-1.5">
             <span className="text-slate-500 font-medium">Estado:</span>
             <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg">
@@ -277,11 +316,10 @@ export default function AdminRegistroLlavesPage() {
                     setStatusFilter(k as 'all' | 'active' | 'returned')
                     handleFilterChange()
                   }}
-                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
-                    statusFilter === k
-                      ? 'bg-white text-blue-700 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  className={`px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${statusFilter === k
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                    }`}
                 >
                   {l}
                 </button>
@@ -289,7 +327,6 @@ export default function AdminRegistroLlavesPage() {
             </div>
           </div>
 
-          {/* Filtro por Fecha */}
           <div className="flex items-center gap-1.5">
             <span className="text-slate-500 font-medium">Fecha:</span>
             <div className="flex gap-1 bg-slate-100 p-0.5 rounded-lg">
@@ -307,11 +344,10 @@ export default function AdminRegistroLlavesPage() {
                     setDatePreset(k)
                     handleFilterChange()
                   }}
-                  className={`px-2 py-1 rounded-md text-xs font-semibold transition-colors ${
-                    datePreset === k
-                      ? 'bg-white text-blue-700 shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
-                  }`}
+                  className={`px-2 py-1 rounded-md text-xs font-semibold transition-colors ${datePreset === k
+                    ? 'bg-white text-blue-700 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                    }`}
                 >
                   {l}
                 </button>
@@ -358,7 +394,6 @@ export default function AdminRegistroLlavesPage() {
         </div>
       )}
 
-      {/* Tabla de Historial */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto shadow-sm">
         {loading ? (
           <div className="py-16 text-center">
@@ -379,7 +414,7 @@ export default function AdminRegistroLlavesPage() {
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">
-                  Persona
+                  Persona / Solicitante
                 </th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">
                   Llave
@@ -405,12 +440,21 @@ export default function AdminRegistroLlavesPage() {
               {items.map((item) => {
                 const inUse = item.returnedAt === null
                 const duration = calculateDuration(item.takenAt, item.returnedAt, tick)
+                const isCleaning = item.requesterType === 'CLEANING'
 
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-5 py-3.5">
                       <div>
-                        <p className="font-semibold text-slate-900">{item.personName}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-slate-900">{item.personName}</p>
+                          {isCleaning && (
+                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              <Sparkles size={9} />
+                              Limpieza
+                            </span>
+                          )}
+                        </div>
                         <p className="text-[11px] text-slate-400 mt-0.5">{item.personType}</p>
                       </div>
                     </td>
@@ -452,7 +496,6 @@ export default function AdminRegistroLlavesPage() {
           </table>
         )}
 
-        {/* Paginación Server-Side */}
         {total > 0 && (
           <div className="flex items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-500">
             <div>

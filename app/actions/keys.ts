@@ -3,8 +3,18 @@
 import { prisma } from '@/lib/db'
 import { requireAuth, getSession } from '@/lib/session'
 import { logAction } from '@/lib/audit'
+import type { KeyRequesterType } from '@prisma/client'
 
 export type KeyStatusType = 'AVAILABLE' | 'OCCUPIED' | 'INACTIVE'
+
+export interface KeyRequesterOption {
+  id?: string
+  fullName: string
+  position?: string
+  department?: string
+  employeeNumber?: string
+  type: 'PERSON' | 'CLEANING'
+}
 
 export interface KioskKeyItem {
   id: string
@@ -12,13 +22,55 @@ export interface KioskKeyItem {
   status: KeyStatusType
   activeAssignment?: {
     id: string
-    personId: string
-    personName: string
-    personType: string
+    requesterType: 'PERSON' | 'CLEANING'
+    requesterName: string
+    requesterDetail?: string
     takenAt: Date
   } | null
 }
 
+export async function searchKeyRequesters(query: string): Promise<KeyRequesterOption[]> {
+  const trimmed = query.trim()
+  if (!trimmed) {
+    const hosts = await prisma.visitHost.findMany({
+      where: { active: true },
+      take: 15,
+      orderBy: { fullName: 'asc' },
+    })
+
+    return hosts.map((h) => ({
+      id: h.id,
+      fullName: h.fullName,
+      position: h.position,
+      department: h.department,
+      employeeNumber: h.employeeNumber,
+      type: 'PERSON',
+    }))
+  }
+
+  const hosts = await prisma.visitHost.findMany({
+    where: {
+      active: true,
+      OR: [
+        { fullName: { contains: trimmed, mode: 'insensitive' } },
+        { employeeNumber: { contains: trimmed, mode: 'insensitive' } },
+        { department: { contains: trimmed, mode: 'insensitive' } },
+        { position: { contains: trimmed, mode: 'insensitive' } },
+      ],
+    },
+    take: 25,
+    orderBy: { fullName: 'asc' },
+  })
+
+  return hosts.map((h) => ({
+    id: h.id,
+    fullName: h.fullName,
+    position: h.position,
+    department: h.department,
+    employeeNumber: h.employeeNumber,
+    type: 'PERSON',
+  }))
+}
 
 export async function getKioskKeys(): Promise<KioskKeyItem[]> {
   const keys = await prisma.key.findMany({
@@ -27,9 +79,7 @@ export async function getKioskKeys(): Promise<KioskKeyItem[]> {
       assignments: {
         where: { returnedAt: null },
         include: {
-          person: {
-            include: { personType: true },
-          },
+          visitHost: true,
         },
         take: 1,
         orderBy: { takenAt: 'desc' },
@@ -40,29 +90,43 @@ export async function getKioskKeys(): Promise<KioskKeyItem[]> {
 
   return keys.map((k) => {
     const activeAssignment = k.assignments[0]
+    if (!activeAssignment) {
+      return {
+        id: k.id,
+        name: k.name,
+        status: k.status,
+        activeAssignment: null,
+      }
+    }
+
+    const isCleaning = activeAssignment.requesterType === 'CLEANING'
+    const requesterName = isCleaning
+      ? 'Limpieza'
+      : activeAssignment.visitHost?.fullName ?? activeAssignment.requesterLabel ?? 'Empleado'
+    const requesterDetail = isCleaning
+      ? 'Personal de limpieza'
+      : activeAssignment.visitHost
+        ? `${activeAssignment.visitHost.position} · ${activeAssignment.visitHost.department}`
+        : undefined
+
     return {
       id: k.id,
       name: k.name,
-      status: activeAssignment ? 'OCCUPIED' : k.status,
-      activeAssignment: activeAssignment
-        ? {
-          id: activeAssignment.id,
-          personId: activeAssignment.person.id,
-          personName: activeAssignment.person.fullName,
-          personType: activeAssignment.person.personType.name,
-          takenAt: activeAssignment.takenAt,
-        }
-        : null,
+      status: 'OCCUPIED',
+      activeAssignment: {
+        id: activeAssignment.id,
+        requesterType: activeAssignment.requesterType as 'PERSON' | 'CLEANING',
+        requesterName,
+        requesterDetail,
+        takenAt: activeAssignment.takenAt,
+      },
     }
   })
 }
 
-/**
- * Tomar una llave en el kiosco
- */
 export async function takeKey(
   keyId: string,
-  personId: string
+  requester: { type: 'PERSON'; visitHostId: string } | { type: 'CLEANING' }
 ): Promise<{ success: boolean; error?: string }> {
   const key = await prisma.key.findUnique({
     where: { id: keyId },
@@ -82,13 +146,26 @@ export async function takeKey(
     return { success: false, error: 'La llave ya se encuentra ocupada' }
   }
 
-  const person = await prisma.person.findUnique({
-    where: { id: personId },
-    include: { personType: true },
-  })
+  let visitHostId: string | null = null
+  let requesterLabel = 'Limpieza'
+  let auditPersonDetail = 'Personal de limpieza'
 
-  if (!person || !person.active) {
-    return { success: false, error: 'Persona no encontrada o inactiva' }
+  if (requester.type === 'PERSON') {
+    if (!requester.visitHostId) {
+      return { success: false, error: 'Debe seleccionar una persona autorizada' }
+    }
+
+    const host = await prisma.visitHost.findUnique({
+      where: { id: requester.visitHostId },
+    })
+
+    if (!host || !host.active) {
+      return { success: false, error: 'La persona seleccionada no está autorizada o está inactiva' }
+    }
+
+    visitHostId = host.id
+    requesterLabel = host.fullName
+    auditPersonDetail = `${host.position} · ${host.department}`
   }
 
   const now = new Date()
@@ -97,7 +174,9 @@ export async function takeKey(
     await tx.keyAssignment.create({
       data: {
         keyId,
-        personId,
+        visitHostId,
+        requesterType: requester.type as KeyRequesterType,
+        requesterLabel,
         takenAt: now,
       },
     })
@@ -108,14 +187,19 @@ export async function takeKey(
     })
   })
 
-  const session = await getSession()
-  if (session.adminId) {
-    await logAction(session.adminId, 'TAKE_KEY', 'Key', keyId, {
-      keyName: key.name,
-      personName: person.fullName,
-      personType: person.personType.name,
-      takenAt: now,
-    })
+  try {
+    const session = await getSession()
+    if (session?.adminId) {
+      await logAction(session.adminId, 'TAKE_KEY', 'Key', keyId, {
+        keyName: key.name,
+        requesterType: requester.type,
+        requesterName: requesterLabel,
+        requesterDetail: auditPersonDetail,
+        takenAt: now,
+      })
+    }
+  } catch {
+    // Kiosk call outside admin session
   }
 
   return { success: true }
@@ -132,7 +216,7 @@ export async function returnKey(
     include: {
       assignments: {
         where: { returnedAt: null },
-        include: { person: true },
+        include: { visitHost: true },
         take: 1,
         orderBy: { takenAt: 'desc' },
       },
@@ -145,7 +229,7 @@ export async function returnKey(
 
   const activeAssignment = key.assignments[0]
   if (!activeAssignment) {
-    // Si no había assignment activo, sólo aseguramos status AVAILABLE
+    // Si no había assignment activo, aseguramos status AVAILABLE
     await prisma.key.update({
       where: { id: keyId },
       data: { status: 'AVAILABLE' },
@@ -167,21 +251,27 @@ export async function returnKey(
     })
   })
 
-  const session = await getSession()
-  if (session.adminId) {
-    await logAction(session.adminId, 'RETURN_KEY', 'Key', keyId, {
-      keyName: key.name,
-      personName: activeAssignment.person.fullName,
-      returnedAt: now,
-    })
+  try {
+    const session = await getSession()
+    if (session?.adminId) {
+      const requesterName =
+        activeAssignment.requesterType === 'CLEANING'
+          ? 'Limpieza'
+          : activeAssignment.visitHost?.fullName ?? activeAssignment.requesterLabel ?? 'Empleado'
+
+      await logAction(session.adminId, 'RETURN_KEY', 'Key', keyId, {
+        keyName: key.name,
+        requesterType: activeAssignment.requesterType,
+        requesterName,
+        returnedAt: now,
+      })
+    }
+  } catch {
+    // Kiosk call outside admin session
   }
 
   return { success: true }
 }
-
-// ─────────────────────────────────────────────────────────────
-// ACCIONES ADMINISTRATIVAS
-// ─────────────────────────────────────────────────────────────
 
 export interface AdminKeyItem {
   id: string
@@ -192,6 +282,7 @@ export interface AdminKeyItem {
   updatedAt: Date
   activeAssignment?: {
     id: string
+    requesterType: 'PERSON' | 'CLEANING'
     personName: string
     personDepartment?: string
     takenAt: Date
@@ -208,7 +299,7 @@ export async function listAdminKeys(): Promise<AdminKeyItem[]> {
     include: {
       assignments: {
         where: { returnedAt: null },
-        include: { person: { include: { personType: true } } },
+        include: { visitHost: true },
         take: 1,
         orderBy: { takenAt: 'desc' },
       },
@@ -221,6 +312,16 @@ export async function listAdminKeys(): Promise<AdminKeyItem[]> {
 
   return keys.map((k) => {
     const activeAssignment = k.assignments[0]
+    const isCleaning = activeAssignment?.requesterType === 'CLEANING'
+    const personName = isCleaning
+      ? 'Limpieza'
+      : activeAssignment?.visitHost?.fullName ?? activeAssignment?.requesterLabel ?? 'Empleado'
+    const personDepartment = isCleaning
+      ? 'Personal de limpieza'
+      : activeAssignment?.visitHost
+        ? `${activeAssignment.visitHost.position} · ${activeAssignment.visitHost.department}`
+        : undefined
+
     return {
       id: k.id,
       name: k.name,
@@ -231,8 +332,9 @@ export async function listAdminKeys(): Promise<AdminKeyItem[]> {
       activeAssignment: activeAssignment
         ? {
           id: activeAssignment.id,
-          personName: activeAssignment.person.fullName,
-          personDepartment: activeAssignment.person.personType.name,
+          requesterType: activeAssignment.requesterType as 'PERSON' | 'CLEANING',
+          personName,
+          personDepartment,
           takenAt: activeAssignment.takenAt,
         }
         : null,
@@ -347,7 +449,8 @@ export interface KeyAssignmentHistoryItem {
   id: string
   keyId: string
   keyName: string
-  personId: string
+  requesterType: 'PERSON' | 'CLEANING'
+  personId?: string | null
   personName: string
   personType: string
   takenAt: Date
@@ -375,6 +478,7 @@ export async function listKeyAssignmentsHistory(filters?: {
   keyId?: string
   search?: string
   status?: 'active' | 'returned' | 'all'
+  requesterType?: 'all' | 'PERSON' | 'CLEANING'
   dateFrom?: string
   dateTo?: string
   page?: number
@@ -403,20 +507,32 @@ export async function listKeyAssignmentsHistory(filters?: {
         ? { returnedAt: { not: null } }
         : {}
 
+  const requesterTypeFilter =
+    filters?.requesterType && filters.requesterType !== 'all'
+      ? { requesterType: filters.requesterType as KeyRequesterType }
+      : {}
+
   const searchTerm = filters?.search?.trim()
-  const searchFilter = searchTerm
-    ? {
+  let searchFilter = {}
+  if (searchTerm) {
+    const isSearchingCleaning = 'limpieza'.includes(searchTerm.toLowerCase())
+    searchFilter = {
       OR: [
         { key: { name: { contains: searchTerm, mode: 'insensitive' as const } } },
-        { person: { fullName: { contains: searchTerm, mode: 'insensitive' as const } } },
+        { requesterLabel: { contains: searchTerm, mode: 'insensitive' as const } },
+        { visitHost: { fullName: { contains: searchTerm, mode: 'insensitive' as const } } },
+        { visitHost: { employeeNumber: { contains: searchTerm, mode: 'insensitive' as const } } },
+        { visitHost: { department: { contains: searchTerm, mode: 'insensitive' as const } } },
+        ...(isSearchingCleaning ? [{ requesterType: 'CLEANING' as KeyRequesterType }] : []),
       ],
     }
-    : {}
+  }
 
   const where = {
     ...(filters?.keyId ? { keyId: filters.keyId } : {}),
     ...dateFilter,
     ...statusFilter,
+    ...requesterTypeFilter,
     ...searchFilter,
   }
 
@@ -426,9 +542,7 @@ export async function listKeyAssignmentsHistory(filters?: {
       where,
       include: {
         key: true,
-        person: {
-          include: { personType: true },
-        },
+        visitHost: true,
       },
       orderBy: { takenAt: 'desc' },
       skip,
@@ -441,13 +555,25 @@ export async function listKeyAssignmentsHistory(filters?: {
     if (a.returnedAt) {
       durationMinutes = Math.round((new Date(a.returnedAt).getTime() - new Date(a.takenAt).getTime()) / 60000)
     }
+
+    const isCleaning = a.requesterType === 'CLEANING'
+    const personName = isCleaning
+      ? 'Limpieza'
+      : a.visitHost?.fullName ?? a.requesterLabel ?? 'Empleado'
+    const personType = isCleaning
+      ? 'Personal de limpieza'
+      : a.visitHost
+        ? `${a.visitHost.position} · ${a.visitHost.department}`
+        : 'Empleado'
+
     return {
       id: a.id,
       keyId: a.key.id,
       keyName: a.key.name,
-      personId: a.person.id,
-      personName: a.person.fullName,
-      personType: a.person.personType.name,
+      requesterType: a.requesterType as 'PERSON' | 'CLEANING',
+      personId: a.visitHostId,
+      personName,
+      personType,
       takenAt: a.takenAt,
       returnedAt: a.returnedAt,
       durationMinutes,

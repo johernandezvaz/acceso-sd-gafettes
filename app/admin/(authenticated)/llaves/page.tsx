@@ -230,7 +230,14 @@ export default function AdminLlavesPage() {
                   <td className="px-5 py-3.5 text-slate-700">
                     {k.activeAssignment ? (
                       <div>
-                        <p className="font-semibold text-slate-900">{k.activeAssignment.personName}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="font-semibold text-slate-900">{k.activeAssignment.personName}</p>
+                          {k.activeAssignment.requesterType === 'CLEANING' && (
+                            <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              Limpieza
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-400 mt-0.5">
                           {k.activeAssignment.personDepartment} · Tomada {formatDateTime(k.activeAssignment.takenAt)}
                         </p>

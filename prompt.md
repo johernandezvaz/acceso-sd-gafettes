@@ -1,1055 +1,694 @@
-# CORRECCIÓN COMPLETA — GAFETE DE VISITANTE PARA BROTHER QL-810W
+# CORRECCIÓN — AUTORIZACIÓN PARA SOLICITAR LLAVES
 
 
-Necesitamos reemplazar completamente la implementación actual de impresión del gafete de visitante.
+Necesitamos modificar el módulo de llaves para establecer correctamente quién puede solicitar/tomar una llave.
 
 
-IMPORTANTE: anteriormente se asumió incorrectamente que la impresora era Zebra y que debíamos utilizar ZPL. Esto es incorrecto.
+## 1. PERSONAS AUTORIZADAS
 
 
-La impresora física real es:
+Las personas que pueden tomar una llave serán exactamente las mismas personas que actualmente pueden ser seleccionadas como:
 
 
-Brother QL-810W
+"A quién visita"
 
 
-Por lo tanto, debemos eliminar cualquier implementación basada en Zebra/ZPL y reemplazarla por una solución compatible específicamente con Brother QL-810W.
+Es decir, deben provenir del catálogo existente:
 
 
-Además, debemos rediseñar el gafete para sus dimensiones físicas reales y limitarlo estrictamente a blanco y negro.
+VisitHost
 
 
----
+NO crear un nuevo catálogo de personas para las llaves.
 
 
-# 1. IMPRESORA
+La fuente de verdad debe ser:
 
 
-La impresora objetivo es:
-
-
-Brother QL-810W
-
-
-Consideraciones conocidas:
-
-
-- Resolución estándar: 300 dpi.
-- Alta resolución disponible: 300 × 600 dpi.
-- Ancho máximo de impresión: aproximadamente 58 mm.
-- Conectividad: USB y Wi-Fi.
-- Compatible con tecnologías de impresión de Brother.
-- Soporte para Brother Print SDK.
-
-
-NO utilizar:
-
-
-- ZPL.
-- Zebra.
-- Comandos `^XA`.
-- `^XZ`.
-- `^FO`.
-- `^FD`.
-- `^PW`.
-- `^LL`.
-- `^BQN`.
-- Ningún otro comando específico de Zebra.
-
-
-La solución debe utilizar exclusivamente tecnologías compatibles con Brother QL-810W.
-
-
-Antes de implementar, revisa la documentación oficial disponible para este modelo y determina cuál es el mecanismo más apropiado para nuestra aplicación.
+PostgreSQL
+    ↓
+VisitHost
+    ↓
+Personas autorizadas para recibir visitantes
+    ↓
+Personas autorizadas para solicitar llaves
 
 
 ---
 
 
-# 2. DIMENSIONES FÍSICAS CORRECTAS
+# 2. EXCEPCIÓN: LIMPIEZA
 
 
-Las dimensiones anteriores estaban invertidas.
-
-
-Las dimensiones CORRECTAS del gafete son:
+Además de las personas existentes en `VisitHost`, debe existir una opción especial:
 
 
 ```text
-Ancho: 53 mm
-Alto: 84.5 mm
+Limpieza
 
-La orientación debe ser:
+Esta opción NO representa a una persona específica.
 
-53 mm
-←─────────→
+No queremos registrar los nombres individuales del personal de limpieza porque existe mucha rotación.
 
+Por lo tanto:
 
-┌───────────────────┐
-│                   │
-│                   │
-│      GAFETE       │
-│                   │
-│                   │
-│                   │
-│                   │
-└───────────────────┘
+VisitHost
+    ├── Personas reales
+    │
+    └── NO incluye necesariamente "Limpieza"
 
+y para el módulo de llaves tendremos una opción adicional/global:
 
-        ↑
-        │
-      84.5 mm
-        │
-        ↓
+Limpieza
+3. FLUJO PARA TOMAR UNA LLAVE
+
+Actualmente el modal permite escribir manualmente:
+
+Nombre del empleado
+[ Nombre completo ]
+
+Esto debe eliminarse.
+
+No queremos que el usuario pueda escribir cualquier nombre.
+
+El nuevo flujo debe ser exactamente similar al flujo de selección de:
+
+"A quién visita"
 
 Es decir:
 
-53 mm corresponden al eje horizontal.
-84.5 mm corresponden al eje vertical.
-El gafete es vertical/retrato.
-NO debemos rotarlo posteriormente.
-NO debemos diseñarlo como 84.5 × 53 mm para después girarlo.
+Llave disponible
+       ↓
+Tomar
+       ↓
+¿Quién solicita la llave?
+       ↓
+Abrir buscador
+       ↓
+Buscar persona
+       ↓
+Seleccionar persona
+       ↓
+Confirmar
+4. BUSCADOR
 
-La implementación debe diseñarse directamente para:
+El selector debe utilizar un popup/modal de búsqueda.
 
-53 mm × 84.5 mm
+No mostrar un combobox enorme con todas las personas cargadas desde el inicio.
 
-Esto es compatible con el ancho máximo aproximado de impresión de la QL-810W.
+Debe utilizar el mismo patrón UX que ya implementamos para VisitHost.
 
-3. IMPORTANTE SOBRE EL TAMAÑO
+Ejemplo:
 
-No utilizar dimensiones arbitrarias como:
+┌─────────────────────────────────────────┐
+│ ¿Quién solicita la llave?            × │
+│                                         │
+│ [ 🔍 Buscar persona...                 ] │
+│                                         │
+│ Resultados                               │
+│                                         │
+│ Juan Pérez                               │
+│ Supervisor de Procesos                   │
+│ Manufactura                              │
+│                                         │
+│ María González                           │
+│ Analista                                 │
+│ Recursos Humanos                          │
+│                                         │
+│ ─────────────────────────────────────── │
+│                                         │
+│ 🧹 Limpieza                              │
+│ Personal de limpieza                    │
+└─────────────────────────────────────────┘
+5. BÚSQUEDA
 
-212px
+La búsqueda de personas debe consultar:
 
-ni asumir que:
+VisitHost
 
-53px = 53mm
+y debe permitir buscar por:
 
-El tamaño visual debe representar la proporción física real:
+Nombre.
+Número de empleado.
+Departamento.
+Puesto.
 
-53 / 84.5
+Debe ser:
 
-Para la impresión física, utiliza las unidades correspondientes al mecanismo de impresión de Brother.
+Case-insensitive.
+Parcial.
+Server-side.
+Utilizando Prisma/PostgreSQL.
 
-Si es necesario convertir a dots:
+No cargar todo el catálogo al navegador para realizar el filtro.
 
-dots = mm / 25.4 * DPI
+6. LIMPIEZA COMO OPCIÓN ESPECIAL
 
-Utiliza el DPI real que corresponda al modo de impresión elegido.
+La opción:
 
-No inventes un DPI diferente al soportado por la QL-810W.
+Limpieza
 
-4. CAMBIO COMPLETO DE ZEBRA/ZPL A BROTHER
+debe aparecer siempre como una opción adicional dentro del selector.
 
-Actualmente se estaba planteando generar ZPL.
-
-Esto debe descartarse completamente.
-
-No quiero una capa de compatibilidad que genere ZPL.
-
-La arquitectura debe cambiar a una solución específica para Brother.
-
-Investiga primero las alternativas compatibles:
-
-Brother Raster Commands.
-ESC/P.
-P-touch Template.
-Brother Print SDK.
-Comunicación Wi-Fi.
-Comunicación USB.
-Otro mecanismo oficialmente compatible con QL-810W.
-
-Selecciona la opción más apropiada para nuestra aplicación.
-
-Si Brother Print SDK es la alternativa adecuada, utilízala.
-
-Si la aplicación web no puede comunicarse directamente con la impresora debido a las restricciones del navegador, no inventes una API inexistente.
-
-En ese caso, separa:
-
-Generación de impresión
-        ↓
-Transporte hacia la impresora
-
-y utiliza una arquitectura apropiada, como un servicio local, SDK o mecanismo compatible.
-
-5. ARQUITECTURA DE IMPRESIÓN
-
-No quiero que toda la lógica de impresión quede dentro de:
-
-GafeteVisitante.tsx
-
-Crea un módulo independiente para impresión.
+No debe requerir buscar un nombre específico.
 
 Por ejemplo:
 
-lib/printing/
-    brotherPrinter.ts
-    visitorBadge.ts
+Buscar persona...
 
-Los nombres pueden adaptarse a la arquitectura actual.
 
-Debe existir conceptualmente una separación entre:
+Resultados:
 
-generateVisitorBadge()
+
+Juan Pérez
+María González
+
+
+──────────────
+
+
+Limpieza
+
+Si el usuario selecciona:
+
+Limpieza
+
+el registro de la llave debe indicar claramente que fue solicitada por:
+
+Limpieza
+7. BASE DE DATOS
+
+Necesitamos adaptar el modelo KeyAssignment.
+
+Actualmente se planteó:
+
+KeyAssignment
+├── id
+├── key_id
+├── person_id
+├── taken_at
+├── returned_at
+└── created_at
+
+Esto funciona para personas reales, pero necesitamos soportar también el caso:
+
+Limpieza
+
+sin crear una persona ficticia en Person.
+
+NO crear:
+
+Person:
+nombre = "Limpieza"
+
+porque conceptualmente no es una persona.
+
+Tampoco crear múltiples usuarios/personas de limpieza.
+
+8. MODELADO RECOMENDADO
+
+Adapta KeyAssignment para permitir que el solicitante pueda ser:
+
+Una persona real de VisitHost.
+El grupo especial Limpieza.
+
+La solución debe mantener una relación real con la persona cuando se trate de un empleado.
+
+Por ejemplo, puedes utilizar una estructura equivalente a:
+
+KeyAssignment
+├── id
+├── key_id
+├── visit_host_id      nullable
+├── requester_type
+├── requester_label
+├── taken_at
+├── returned_at
+└── created_at
+
+Donde:
+
+requester_type:
+PERSON
+CLEANING
 
 y:
 
-printVisitorBadge()
+visit_host_id
 
-La primera función se encarga de preparar la etiqueta.
+solo se utiliza cuando:
 
-La segunda se encarga de enviarla mediante el mecanismo compatible con Brother.
+requester_type = PERSON
 
-6. COMPONENTE ACTUAL
+Para:
 
-Actualmente existe un componente similar a:
+requester_type = CLEANING
 
-GafeteVisitante
+el registro debe representar simplemente:
 
-que recibe:
+Limpieza
 
-export interface GafeteVisitanteProps {
-  folio: string;
-  nombre: string;
-  empresa: string;
-  visitaA: string;
-  motivo: string;
-  identificacion: string;
-  fechaHora: string;
-}
+No inventes una persona.
 
-Estos datos deben seguir siendo los datos principales del gafete.
+Si existe una solución más limpia con un enum/modelo diferente, puedes utilizarla, pero debe mantener estos principios.
 
-No cambiar innecesariamente el contrato existente si no es necesario.
+9. IMPORTANTE: NO USAR Person SI NO CORRESPONDE
 
-El componente debe continuar representando el gafete visualmente.
+Anteriormente se planteó relacionar:
 
-Sin embargo, la impresión física ya no debe depender de HTML/CSS.
+KeyAssignment → Person
 
-7. DISEÑO DEL GAFETE
+para identificar quién toma una llave.
 
-Rediseña el gafete para una etiqueta vertical de:
+Debemos corregir esta parte.
 
-53 mm × 84.5 mm
+Las personas autorizadas para tomar llaves son las de:
 
-El diseño debe ser:
-
-Limpio.
-Profesional.
-Minimalista.
-Muy legible.
-Optimizado para impresión térmica.
-Alto contraste.
-Adecuado para una etiqueta pequeña.
-
-NO intentar conservar exactamente el layout actual de 212px.
-
-Adapta la composición al nuevo tamaño físico.
-
-8. RESTRICCIÓN ABSOLUTA DE COLOR
-
-El gafete debe imprimirse ÚNICAMENTE en:
-
-BLANCO
-NEGRO
-
-No debe existir ningún otro color.
-
-Esto significa:
-
-No azul.
-No gris.
-No rojo.
-No verde.
-No amarillo.
-No tonos intermedios.
-No degradados.
-No transparencias de color.
-No sombras grises.
-No elementos semitransparentes.
-
-El diseño debe ser estrictamente:
-
-#FFFFFF
-#000000
-
-o sus equivalentes físicos blanco/negro.
-
-IMPORTANTE:
-
-Esto aplica tanto al:
-
-Preview del gafete.
-Diseño visual.
-Logo.
-QR.
-Texto.
-Líneas.
-Bordes.
-Elementos gráficos.
-Archivo/datos enviados a la impresora.
-
-No debe existir una paleta de colores adicional.
-
-9. LOGO
-
-El logo actual se encuentra en:
-
-public/safe-demo_logo-blc-Photoroom.png
-
-Debe utilizarse este logo.
-
-NO:
-
-Reemplazarlo por una "C".
-Crear otro logo.
-Utilizar un icono diferente.
-Eliminarlo.
-
-Sin embargo, como el gafete debe ser estrictamente blanco y negro, debemos asegurarnos de que el logo sea compatible con impresión monocromática.
-
-Si el PNG contiene tonos grises, transparencias o colores, conviértelo correctamente a una representación binaria/blanco-negro apropiada para la impresora.
-
-No debe introducir grises en la impresión final.
-
-El logo debe conservar:
-
-Proporciones.
-Legibilidad.
-Identidad visual.
-10. ESTRUCTURA DEL GAFETE
-
-El gafete debe contener:
-
-HEADER
-Logo Safe Demo.
-Etiqueta "VISITANTE".
-INFORMACIÓN PRINCIPAL
-Nombre del visitante.
-Empresa.
-Folio.
-INFORMACIÓN DE LA VISITA
-A quién visita.
-Motivo.
-Identificación.
-FOOTER
-Fecha y hora.
-Código QR.
-
-Conceptualmente:
-
-┌───────────────────┐
-│ LOGO      VISITANTE│
-│───────────────────│
-│                   │
-│ NOMBRE            │
-│                   │
-│ Empresa           │
-│                   │
-│ FOLIO #000123     │
-│───────────────────│
-│                   │
-│ VISITA A          │
-│ Juan Pérez        │
-│                   │
-│ MOTIVO            │
-│ Servicio          │
-│                   │
-│ IDENTIFICACIÓN    │
-│ INE               │
-│───────────────────│
-│                   │
-│ 14/08/2026        │
-│ 11:32        [QR] │
-└───────────────────┘
-
-La composición exacta puede mejorar, pero debe conservar esta jerarquía.
-
-11. TEXTO
-
-Todo el texto debe ser negro sobre blanco.
-
-No utilizar:
-
-color: #4b5563;
-color: #6b7280;
-color: #374151;
-
-ni ningún otro gris.
-
-Utilizar exclusivamente:
-
-color: #000000;
-background: #FFFFFF;
-
-Las líneas divisorias también deben ser:
-
-#000000
-
-El texto secundario puede tener menor tamaño o peso tipográfico, pero NO un color diferente.
-
-12. VISITANTE
-
-Debe aparecer claramente:
-
-VISITANTE
-
-Puede utilizar:
-
-Texto negro.
-Fondo negro.
-Texto blanco.
-
-Pero no utilizar ningún otro color.
-
-Por ejemplo:
-
-┌───────────────────┐
-│ LOGO    VISITANTE │
-└───────────────────┘
-
-con "VISITANTE" en blanco sobre un bloque negro es válido.
-
-13. NOMBRE
-
-El nombre debe tener alta jerarquía visual.
-
-Ejemplo:
-
-JUAN PÉREZ
-
-Debe ser negro.
-
-Si el nombre es muy largo:
-
-Juan Carlos Hernández Rodríguez
-
-el sistema debe:
-
-Hacer wrapping.
-Reducir tamaño si es necesario.
-Evitar que se salga del área imprimible.
-
-Nunca permitir que el nombre sea cortado físicamente por los límites de la etiqueta.
-
-14. EMPRESA
-
-Mostrar:
-
-Empresa XYZ
-
-Debe ser negro sobre blanco.
-
-Si la empresa es demasiado larga, manejarla mediante wrapping o reducción controlada.
-
-15. FOLIO
-
-Mostrar claramente:
-
-FOLIO #000123
-
-Debe ser fácilmente identificable.
-
-Utilizar negro sobre blanco.
-
-16. A QUIÉN VISITA
-
-Mostrar:
-
-VISITA A
-Juan Pérez
-
-El valor debe provenir del VisitHost seleccionado desde el nuevo popup de búsqueda.
-
-No volver a utilizar un string hardcodeado.
-
-17. MOTIVO
-
-Mostrar:
-
-MOTIVO
-Servicio
-
-Debe utilizar el mismo valor que actualmente recibe el componente.
-
-Los labels existentes deben mantenerse:
-
-practicas → Prácticas
-prueba_sistema → Prueba de sistema
-revision_proyecto → Revisión de proyecto
-servicio → Servicio
-visita_cliente → Visita cliente
-visita_corporativo → Visita corporativo
-visita_proveedor → Visita de proveedor
-
-No eliminar estos valores.
-
-18. IDENTIFICACIÓN
-
-Mantener los labels actuales:
-
-ine → INE
-pasaporte → Pasaporte
-licencia → Licencia de conducir
-gafete_empresa → Gafete de empresa
-
-Debe aparecer como:
-
-IDENTIFICACIÓN
-INE
-19. FECHA Y HORA
-
-Mantener el formato:
-
-DD/MM/YYYY · HH:mm
-
-Ejemplo:
-
-14/08/2026 · 11:32
-
-Todo en negro.
-
-No utilizar colores secundarios.
-
-20. CÓDIGO QR
-
-El QR debe mantenerse.
-
-Actualmente se genera:
-
-const qrData = JSON.stringify({
-  folio,
-  nombre,
-  empresa,
-  fecha: fechaHora
-});
-
-Mantener esta información salvo que exista una razón técnica para modificarla.
-
-El QR debe ser:
-
-Negro sobre blanco.
-Sin colores.
-Sin degradados.
-Sin fondo transparente que produzca problemas.
-De tamaño suficiente para ser escaneado.
-
-No enviar:
-
-<QRCodeSVG />
-
-directamente a la impresora.
-
-El QR debe convertirse/generarse utilizando un método compatible con el sistema de impresión de Brother.
-
-21. QR Y ESPACIO
-
-El QR debe tener suficiente espacio alrededor para poder ser escaneado correctamente.
-
-No colocarlo pegado:
-
-a bordes;
-a texto;
-a líneas.
-
-Mantener un pequeño margen blanco alrededor del QR.
-
-22. PREVIEW VISUAL
-
-Mantener el preview React del gafete para que el usuario pueda visualizar qué se va a imprimir.
-
-Pero el preview debe:
-
-Representar 53 × 84.5 mm.
-Ser vertical.
-Ser blanco y negro.
-No utilizar colores.
-No utilizar sombras grises.
-No utilizar backgrounds grises.
-Mantener la proporción física.
-
-El preview debe utilizar:
-
-background: #FFFFFF
-color: #000000
-border: #000000
-
-únicamente.
-
-No utilizar:
-
-slate
-gray
-blue
-red
-green
-
-dentro del gafete.
-
-23. EL PREVIEW NO ES LA IMPRESIÓN
-
-El preview debe servir para visualización.
-
-La impresión física debe utilizar el mecanismo específico de Brother.
-
-La arquitectura debe ser:
-
-Datos del visitante
-        ↓
-Preview React
-        ↓
-Generador Brother
-        ↓
-Payload de impresión
-        ↓
-Brother QL-810W
-24. COMUNICACIÓN CON LA IMPRESORA
-
-Investiga la mejor manera de enviar trabajos de impresión a:
-
-Brother QL-810W
-
-La impresora tiene:
-
-USB.
-Wi-Fi.
-
-No asumas que el navegador puede abrir directamente una conexión TCP/USB hacia la impresora.
-
-Si se necesita:
-
-Brother Print SDK.
-Aplicación local.
-Servicio local.
-API local.
-P-touch Template.
-Otro componente.
-
-implementa la arquitectura correspondiente.
-
-No inventes APIs.
-
-Si una parte requiere instalación/configuración fuera de Next.js, documenta exactamente qué debe instalarse y cómo configurarlo.
-
-25. GENERADOR DE IMPRESIÓN
-
-Crea un módulo independiente.
-
-Por ejemplo:
-
-lib/printing/brother/
-    visitorBadge.ts
-    printer.ts
-
-Debe existir una función equivalente a:
-
-generateVisitorBadge(data)
-
-que reciba:
-
-{
-  folio,
-  nombre,
-  empresa,
-  visitaA,
-  motivo,
-  identificacion,
-  fechaHora
-}
-
-y genere el formato requerido por la tecnología Brother seleccionada.
-
-26. NO UTILIZAR ZPL
-
-Esta instrucción es crítica.
-
-No debe quedar ningún código nuevo relacionado con:
-
-ZPL
-Zebra
-^XA
-^XZ
-^FO
-^FD
-^PW
-^LL
-^BQN
-
-Si ya existe código creado previamente intentando implementar Zebra/ZPL:
-
-Identifícalo.
-Elimínalo o reemplázalo.
-No lo dejes como mecanismo activo.
-No mantengas dos sistemas de impresión simultáneamente salvo que exista una razón explícita.
-
-La impresora objetivo es exclusivamente:
-
-Brother QL-810W
-27. RESOLUCIÓN
-
-La QL-810W trabaja con 300 dpi y puede manejar alta resolución.
-
-Determina qué resolución es más apropiada para nuestro caso.
-
-Si se utiliza 300 dpi:
-
-53 mm / 25.4 * 300 ≈ 626 dots
-84.5 mm / 25.4 * 300 ≈ 998 dots
-
-Estos valores son aproximados y deben utilizarse solamente si corresponden al modo de impresión elegido.
-
-No hardcodees dimensiones incorrectas.
-
-La etiqueta final debe representar físicamente:
-
-53 mm × 84.5 mm
-28. ÁREA IMPRIMIBLE
-
-No coloques elementos exactamente en los bordes.
-
-Considera márgenes de seguridad.
-
-El contenido debe quedar completamente dentro de:
-
-53 mm × 84.5 mm
-
-No permitir que:
-
-Logo.
-Nombre.
-Folio.
-Texto.
-QR.
-Fecha.
-
-se corten.
-
-29. MANEJO DE TEXTO LARGO
-
-Probar especialmente:
-
-Juan Carlos Hernández Rodríguez
-Empresa Mexicana de Servicios Industriales
-María Fernanda González Hernández
-
-y motivos largos.
-
-El sistema debe adaptar el contenido.
-
-Prioridad:
-
-No salir del área.
-Mantener legibilidad.
-Mantener jerarquía.
-Reducir tamaño únicamente cuando sea necesario.
-30. DATOS DINÁMICOS
-
-No hardcodear ningún dato del visitante.
-
-Ejemplo:
-
-folio = "000123"
-nombre = "Juan Pérez"
-empresa = "Empresa XYZ"
-visitaA = "María González"
-motivo = "Servicio"
-identificacion = "INE"
-fechaHora = "2026-08-14T11:32:00"
-
-debe producir una etiqueta completamente diferente si cambian los datos.
-
-31. SEGURIDAD
-
-Escapa correctamente cualquier dato que pueda interferir con el formato de impresión seleccionado.
-
-No permitas que contenido proporcionado por usuarios pueda:
-
-romper comandos de impresión;
-inyectar comandos;
-modificar la estructura de la etiqueta.
-
-La información del visitante debe tratarse como datos, no como comandos.
-
-32. FLUJO COMPLETO
-
-El flujo final debe quedar:
-
-Nuevo visitante
-        ↓
-Formulario
-        ↓
-Seleccionar "A quién visita"
-        ↓
-Popup de búsqueda
-        ↓
-Seleccionar VisitHost
-        ↓
-Registrar visitante
-        ↓
-Persistir en PostgreSQL
-        ↓
-Generar folio
-        ↓
-Generar gafete
-        ↓
-Preview
-        ↓
-Enviar a Brother QL-810W
-        ↓
-Imprimir
-33. BASE DE DATOS
-
-No modificar innecesariamente la estructura existente de visitantes.
-
-El gafete debe utilizar los datos ya persistidos.
-
-Especialmente:
-
-Visitor
-    ↓
 VisitHost
 
-El valor de "A quién visita" debe provenir de la relación existente con VisitHost.
+no necesariamente todas las personas de:
 
-No volver a almacenar únicamente el nombre como string si ya existe la relación.
+Person
 
-34. PRUEBAS VISUALES
+Por lo tanto, NO permitir que cualquier:
 
-Probar al menos:
+Seguridad.
+Limpieza.
+Médico.
+Practicante.
 
-Caso 1
-Nombre:
+pueda solicitar una llave únicamente por estar registrado en Person.
+
+La autorización para solicitar llaves debe basarse en:
+
+VisitHost
++
+Limpieza
+10. RELACIONES
+
+La relación conceptual debe quedar:
+
+VisitHost
+    │
+    │
+    ▼
+KeyAssignment
+    │
+    ▼
+Key
+
+y adicionalmente:
+
+CLEANING
+    │
+    ▼
+KeyAssignment
+    │
+    ▼
+Key
+
+Por lo tanto:
+
+                ┌── VisitHost
+                │
+Requester ──────┤
+                │
+                └── CLEANING
+                       │
+                       ▼
+                  KeyAssignment
+                       │
+                       ▼
+                      Key
+11. INFORMACIÓN MOSTRADA EN EL KIOSCO
+
+Cuando una llave está ocupada, debe mostrarse:
+
+Persona
+Juan Pérez
+
+o:
+
+Limpieza
+Limpieza
+
+Por ejemplo:
+
+Sala Mezquite
+
+
+En uso
+
+
+Juan Pérez
+hace 35m
+
+o:
+
+Sala Agave
+
+
+En uso
+
+
+Limpieza
+hace 12m
+12. DEVOLUCIÓN
+
+La devolución funciona exactamente igual independientemente de quién haya tomado la llave.
+
+Si fue:
+
+Juan Pérez
+
+mostrar:
+
+¿Confirmas que Juan Pérez devuelve la llave de Sala Agave?
+
+Si fue:
+
+Limpieza
+
+mostrar:
+
+¿Confirmas que Limpieza devuelve la llave de Sala Agave?
+
+Al devolver:
+
+returned_at = ahora
+
+y conservar el historial.
+
+13. HISTORIAL ADMINISTRATIVO
+
+En:
+
+/admin/llaves/registro
+
+el registro debe mostrar:
+
+Persona / Solicitante
+Llave
+Fecha
+Hora de toma
+Hora de devolución
+Duración
+Estado
+
+Para una persona:
+
+Juan Pérez
+Sala Agave
+14/08/2026
+08:15
+16:02
+7h 47m
+Devuelta
+
+Para limpieza:
+
+Limpieza
+Sala Agave
+14/08/2026
+08:15
+09:20
+1h 05m
+Devuelta
+14. BUSCADOR DEL REGISTRO
+
+El buscador existente de:
+
+/admin/llaves/registro
+
+también debe encontrar:
+
+Juan Pérez
+
+y:
+
+Limpieza
+
+Por ejemplo:
+
+Buscar: limpieza
+
+debe mostrar todos los registros históricos donde:
+
+requester_type = CLEANING
+15. FILTRO POR SOLICITANTE
+
+Si es posible, agrega un filtro:
+
+Solicitante:
+[ Todos ▼ ]
+
+con:
+
+Todos
+Personas
+Limpieza
+
+Opcionalmente, dentro de personas puede buscarse por nombre.
+
+16. VISITHOST INACTIVO
+
+Si un VisitHost es desactivado:
+
+active = false
+
+debe dejar de aparecer como opción para nuevas solicitudes de llaves.
+
+Pero los registros históricos deben permanecer.
+
+Por ejemplo:
+
+Juan Pérez
+active = false
+
+No debe poder tomar una nueva llave.
+
+Sin embargo:
+
+KeyAssignment
+Juan Pérez
+14/08/2026
+
+debe seguir existiendo en el historial.
+
+17. LIMPIEZA SIEMPRE DISPONIBLE
+
+La opción:
+
+Limpieza
+
+debe estar disponible independientemente de los registros de VisitHost.
+
+No depende de:
+
+VisitHost.active
+
+porque no representa a una persona específica.
+
+18. NO DUPLICAR CATÁLOGOS
+
+No crear:
+
+KeyPeople
+KeyRequesters
+AuthorizedKeyUsers
+
+ni ninguna tabla equivalente para duplicar VisitHost.
+
+Utilizar:
+
+VisitHost
+
+como catálogo existente de personas autorizadas.
+
+La única excepción es:
+
+Limpieza
+
+que es un solicitante especial/grupo.
+
+19. FLUJO COMPLETO
+
+El flujo final debe ser:
+
+Usuario toca "Tomar"
+        ↓
+Modal "¿Quién solicita la llave?"
+        ↓
+┌─────────────────────────────┐
+│ Buscar persona...           │
+│                             │
+│ Juan Pérez                  │
+│ María González              │
+│                             │
+│ ─────────────────────────── │
+│                             │
+│ 🧹 Limpieza                 │
+└─────────────────────────────┘
+        ↓
+Seleccionar
+        ↓
+Confirmar
+        ↓
+KeyAssignment
+        ↓
+PostgreSQL
+20. EJEMPLO: PERSONA
+Llave:
+Sala Mezquite
+
+
+Solicitante:
 Juan Pérez
 
 
-Empresa:
-Empresa XYZ
-Caso 2
-Nombre:
-Juan Carlos Hernández Rodríguez
+KeyAssignment:
 
 
-Empresa:
-Empresa Mexicana de Servicios Industriales
-Caso 3
-
-Todos los campos largos.
-
-Verificar:
-
-El contenido cabe.
-No existen colores diferentes de blanco/negro.
-El logo es legible.
-El QR es escaneable.
-El folio es legible.
-El gafete conserva 53 × 84.5 mm.
-No existen cortes.
-No existen elementos fuera del área.
-35. VERIFICACIÓN DE COLOR
-
-Antes de considerar terminada la tarea, revisa específicamente el componente.
-
-No debe existir dentro del gafete:
-
-bg-slate-*
-text-slate-*
-border-slate-*
-text-gray-*
-bg-gray-*
-border-gray-*
-blue-*
-red-*
-green-*
-
-ni estilos equivalentes que introduzcan colores adicionales.
-
-Todo debe reducirse a:
-
-#000000
-#FFFFFF
-
-La impresora debe recibir una representación monocromática.
-
-36. README
-
-Actualiza README.md con:
-
-Impresión de gafetes
-
-Documentar:
-
-Brother QL-810W.
-Resolución utilizada.
-Tamaño 53 × 84.5 mm.
-Orientación vertical.
-Blanco y negro.
-Tecnología de impresión utilizada.
-Dependencias.
-Configuración.
-Comunicación con impresora.
-USB/Wi-Fi si aplica.
-Cómo realizar una prueba.
-Cómo solucionar problemas de conexión.
-Cómo verificar que la etiqueta tenga las dimensiones correctas.
-
-No documentar ZPL como solución.
-
-37. DOCUMENTACIÓN DEL AGENTE
-
-Actualizar también el contexto para agentes de IA.
-
-Dejar explícito:
-
-Printer:
-Brother QL-810W
+key_id = Sala Mezquite
+visit_host_id = <ID de Juan Pérez>
+requester_type = PERSON
+taken_at = ahora
+returned_at = NULL
+21. EJEMPLO: LIMPIEZA
+Llave:
+Sala Agave
 
 
-Badge:
-53 mm × 84.5 mm
+Solicitante:
+Limpieza
 
 
-Orientation:
-Portrait
+KeyAssignment:
 
 
-Colors:
-Black + White only
+key_id = Sala Agave
+visit_host_id = NULL
+requester_type = CLEANING
+taken_at = ahora
+returned_at = NULL
+22. VALIDACIONES
+
+Antes de permitir tomar una llave:
+
+Persona
+
+Debe verificarse server-side que:
+
+VisitHost existe
+AND
+VisitHost.active = true
+Limpieza
+
+Debe verificarse:
+
+requester_type = CLEANING
+
+y permitir la operación.
+
+No confiar únicamente en la información enviada desde el cliente.
+
+23. AUDITORÍA
+
+Las operaciones:
+
+TAKE_KEY
+RETURN_KEY
+
+deben continuar generando AuditLog.
+
+El log debe poder identificar:
+
+Quién realizó la operación en el sistema
+
+y:
+
+Quién solicitó/tomó la llave
+
+Son conceptos diferentes.
+
+Por ejemplo:
+
+Administrador operativo:
+José Hernández
 
 
-Printing:
-Brother-compatible implementation
+Solicitante:
+Limpieza
 
 
-NOT:
-Zebra
-ZPL
+Llave:
+Sala Agave
 
-Esto es importante para que futuros agentes no vuelvan a implementar ZPL por error.
+No mezclar estos dos datos.
 
-38. NO MODIFICAR FUNCIONALIDADES NO RELACIONADAS
+24. README
 
-No modificar innecesariamente:
+Actualiza README.md explicando:
 
-Login.
-Dashboard.
-Usuarios.
-Superadmin.
-VisitHosts.
-Personal.
-Registros.
-Llaves.
-Auditoría.
-Base de datos.
-
-El objetivo de esta tarea es exclusivamente:
-
-Actualizar impresión del gafete
-+
-Cambiar impresora objetivo
-+
-Cambiar dimensiones
-+
-Cambiar diseño
-+
-Cambiar colores
-39. VALIDACIÓN FINAL
-
-Ejecutar:
-
-npm run typecheck
-npm run lint
-npm run build
-
-Corregir cualquier error generado.
-
-Después verificar:
-
-El visitante puede registrarse.
-El gafete se genera.
-El preview tiene proporción 53 × 84.5 mm.
-El preview es exclusivamente blanco y negro.
-El logo aparece correctamente.
-El QR aparece correctamente.
-El QR contiene los datos esperados.
-El mecanismo de impresión es compatible con Brother QL-810W.
-No existe ningún código ZPL/Zebra activo.
-La etiqueta física corresponde a 53 × 84.5 mm.
-No se corta ningún contenido.
-Los textos largos se manejan correctamente.
+Quién puede solicitar llaves.
+Que los solicitantes provienen de VisitHost.
+Que existe el solicitante especial Limpieza.
+Que no se almacenan nombres individuales de limpieza.
+Cómo funciona el selector.
+Cómo se almacenan los KeyAssignment.
+Cómo funciona el historial.
 CRITERIO DE ÉXITO
 
-La implementación final debe representar este flujo:
+Debe funcionar exactamente así:
 
-                CODA
-                  │
-                  ▼
-          Registro visitante
-                  │
-                  ▼
-          Datos persistidos
-                  │
-                  ▼
-        GafeteVisitante
-          ┌───────┴───────┐
-          │               │
-          ▼               ▼
-       Preview       Generador Brother
-          │               │
-          │               ▼
-          │        Brother QL-810W
-          │               │
-          │               ▼
-          │         Etiqueta física
-          │
-          ▼
-      53 × 84.5 mm
+Persona autorizada
+Tomar llave
+     ↓
+Buscar "Juan"
+     ↓
+Juan Pérez
+     ↓
+Seleccionar
+     ↓
+Confirmar
+     ↓
+Llave asignada a Juan Pérez
+Limpieza
+Tomar llave
+     ↓
+Abrir selector
+     ↓
+Seleccionar "Limpieza"
+     ↓
+Confirmar
+     ↓
+Llave asignada a Limpieza
+Persona NO autorizada
 
-El resultado físico debe ser:
+Si una persona existe en Person pero NO existe en VisitHost:
 
-┌───────────────────┐
-│                   │
-│ LOGO    VISITANTE │
-│───────────────────│
-│                   │
-│ NOMBRE            │
-│ Empresa           │
-│                   │
-│ FOLIO #000123     │
-│───────────────────│
-│                   │
-│ VISITA A          │
-│ Juan Pérez        │
-│                   │
-│ MOTIVO            │
-│ Servicio          │
-│                   │
-│ IDENTIFICACIÓN    │
-│ INE               │
-│───────────────────│
-│                   │
-│ 14/08/2026    QR  │
-│ 11:32             │
-│                   │
-└───────────────────┘
+NO debe aparecer
+
+y no debe poder solicitar una llave.
+
+Persona VisitHost desactivada
+VisitHost.active = false
+
+Debe:
+
+NO aparecer para nuevas solicitudes
+
+pero conservar:
+
+historial de llaves
+Limpieza
+
+Debe:
+
+aparecer siempre
+
+sin necesidad de crear una persona individual.
+
+La fuente de personas reales debe ser VisitHost, y la única opción adicional debe ser Limpieza.
 
 
-ANCHO: 53 mm
-ALTO: 84.5 mm
-
-
-COLORES:
-████ NEGRO
-░░░░ BLANCO
-
-
-NINGÚN OTRO COLOR.
-
-La solución debe estar específicamente diseñada para la Brother QL-810W, no para Zebra.
-
-Antes de implementar cualquier protocolo de impresión, consulta la documentación oficial de Brother para determinar la tecnología más apropiada para enviar la etiqueta desde nuestra aplicación.
-
-
-
-**Una precisión importante:** no le pediría al agente que convierta obligatoriamente el logo a "blanco y neg

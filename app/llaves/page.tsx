@@ -1,12 +1,18 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { KeyRound, ArrowLeft, AlertCircle, Search, User, ChevronDown, Check, X } from 'lucide-react';
+import { KeyRound, ArrowLeft, AlertCircle, User, Sparkles } from 'lucide-react';
 import StatusBar from '@/components/ui/StatusBar';
 import { ROUTES } from '@/lib/constants';
-import { getKioskKeys, takeKey, returnKey, type KioskKeyItem } from '@/app/actions/keys';
-import { getActivePeople, type PersonOption } from '@/app/actions/people';
+import {
+  getKioskKeys,
+  takeKey,
+  returnKey,
+  type KioskKeyItem,
+  type KeyRequesterOption,
+} from '@/app/actions/keys';
+import KeyRequesterPicker from '@/components/ui/KeyRequesterPicker';
 
 function tiempoTranscurrido(desde: Date | string): string {
   const diff = Math.floor((Date.now() - new Date(desde).getTime()) / 60000);
@@ -21,31 +27,27 @@ export default function LlavesPage() {
   const router = useRouter();
 
   const [llaves, setLlaves] = useState<KioskKeyItem[]>([]);
-  const [people, setPeople] = useState<PersonOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [tick, setTick] = useState(0);
 
-  // Modal Tomar
-  const [modalTomar, setModalTomar] = useState<KioskKeyItem | null>(null);
-  const [selectedPerson, setSelectedPerson] = useState<PersonOption | null>(null);
-  const [searchPerson, setSearchPerson] = useState('');
-  const [openCombobox, setOpenCombobox] = useState(false);
+  const [keyToTake, setKeyToTake] = useState<KioskKeyItem | null>(null);
+  const [openPicker, setOpenPicker] = useState(false);
+
+  const [confirmTomar, setConfirmTomar] = useState<{
+    key: KioskKeyItem;
+    requester: KeyRequesterOption;
+  } | null>(null);
   const [submittingTomar, setSubmittingTomar] = useState(false);
   const [errorTomar, setErrorTomar] = useState<string | null>(null);
 
-  // Modal Devolver
   const [modalDevolver, setModalDevolver] = useState<KioskKeyItem | null>(null);
   const [submittingDevolver, setSubmittingDevolver] = useState(false);
   const [errorDevolver, setErrorDevolver] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const [keysData, peopleData] = await Promise.all([
-        getKioskKeys(),
-        getActivePeople(),
-      ]);
+      const keysData = await getKioskKeys();
       setLlaves(keysData);
-      setPeople(peopleData);
     } finally {
       setLoading(false);
     }
@@ -55,28 +57,42 @@ export default function LlavesPage() {
     loadData();
   }, [loadData]);
 
-  // Timer para refrescar "hace Xm"
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 30_000);
     return () => clearInterval(id);
   }, []);
-
   const handleOpenTomar = (llave: KioskKeyItem) => {
-    setModalTomar(llave);
-    setSelectedPerson(null);
-    setSearchPerson('');
-    setOpenCombobox(false);
+    setKeyToTake(llave);
+    setOpenPicker(true);
+  };
+
+  const handleSelectRequester = (requester: KeyRequesterOption) => {
+    if (!keyToTake) return;
+    setOpenPicker(false);
+    setConfirmTomar({
+      key: keyToTake,
+      requester,
+    });
     setErrorTomar(null);
   };
 
   const handleConfirmarTomar = async () => {
-    if (!modalTomar || !selectedPerson) return;
+    if (!confirmTomar) return;
     setSubmittingTomar(true);
     setErrorTomar(null);
     try {
-      const res = await takeKey(modalTomar.id, selectedPerson.id);
+      const payload =
+        confirmTomar.requester.type === 'CLEANING'
+          ? { type: 'CLEANING' as const }
+          : {
+            type: 'PERSON' as const,
+            visitHostId: confirmTomar.requester.id!,
+          };
+
+      const res = await takeKey(confirmTomar.key.id, payload);
       if (res.success) {
-        setModalTomar(null);
+        setConfirmTomar(null);
+        setKeyToTake(null);
         await loadData();
       } else {
         setErrorTomar(res.error ?? 'Error al tomar la llave');
@@ -111,13 +127,6 @@ export default function LlavesPage() {
   const disponibles = llaves.filter((l) => l.status === 'AVAILABLE').length;
   const enUso = llaves.filter((l) => l.status === 'OCCUPIED').length;
   const total = llaves.length;
-
-  const hayModal = !!modalTomar || !!modalDevolver;
-
-  const filteredPeople = people.filter((p) =>
-    p.fullName.toLowerCase().includes(searchPerson.toLowerCase()) ||
-    p.personTypeName.toLowerCase().includes(searchPerson.toLowerCase())
-  );
 
   return (
     <div className="flex flex-col h-full bg-slate-100">
@@ -191,195 +200,167 @@ export default function LlavesPage() {
 
       <StatusBar />
 
-      {/* Modales */}
-      {hayModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          {/* Modal Tomar Llave */}
-          {modalTomar && (
-            <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 flex flex-col gap-5">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900">¿Quién toma la llave?</h2>
-                  <p className="text-sm font-semibold text-blue-700 mt-0.5">{modalTomar.name}</p>
-                </div>
-                <button
-                  onClick={() => setModalTomar(null)}
-                  className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  <X size={18} />
-                </button>
-              </div>
+      <KeyRequesterPicker
+        open={openPicker}
+        onClose={() => {
+          setOpenPicker(false);
+          setKeyToTake(null);
+        }}
+        onSelect={handleSelectRequester}
+      />
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-                  Seleccionar empleado <span className="text-red-500">*</span>
-                </label>
-
-                {/* Combobox selector */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setOpenCombobox(!openCombobox)}
-                    className="
-                      w-full min-h-[52px] px-4 py-3 text-left rounded-xl border-2 border-slate-200 bg-white
-                      focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
-                      flex items-center justify-between gap-2 transition-colors
-                    "
-                  >
-                    {selectedPerson ? (
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-sm font-bold text-slate-900 truncate">
-                          {selectedPerson.fullName}
-                        </span>
-                        <span className="block text-xs text-slate-500 truncate">
-                          {selectedPerson.personTypeName}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-sm text-slate-400">Seleccionar empleado...</span>
-                    )}
-                    <ChevronDown size={16} className="text-slate-400 flex-shrink-0" />
-                  </button>
-
-                  {openCombobox && (
-                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50 max-h-60 flex flex-col">
-                      <div className="relative mb-2">
-                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                          type="text"
-                          value={searchPerson}
-                          onChange={(e) => setSearchPerson(e.target.value)}
-                          placeholder="Buscar por nombre o tipo..."
-                          className="w-full h-9 pl-8 pr-3 text-xs rounded-lg border border-slate-200 focus:outline-none focus:border-blue-500"
-                          autoFocus
-                        />
-                      </div>
-
-                      <div className="overflow-y-auto flex-1 divide-y divide-slate-50">
-                        {filteredPeople.length === 0 ? (
-                          <p className="text-center text-xs text-slate-400 py-4">No hay coincidencias</p>
-                        ) : (
-                          filteredPeople.map((p) => (
-                            <button
-                              key={p.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedPerson(p);
-                                setOpenCombobox(false);
-                                setErrorTomar(null);
-                              }}
-                              className="w-full text-left px-3 py-2 hover:bg-blue-50 rounded-lg flex items-center justify-between text-xs transition-colors"
-                            >
-                              <div>
-                                <p className="font-semibold text-slate-800">{p.fullName}</p>
-                                <p className="text-[10px] text-slate-400">{p.personTypeName}</p>
-                              </div>
-                              {selectedPerson?.id === p.id && <Check size={14} className="text-blue-600" />}
-                            </button>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {errorTomar && (
-                <p className="flex items-center gap-1.5 text-xs text-red-600 font-medium bg-red-50 p-2.5 rounded-xl border border-red-200">
-                  <AlertCircle size={14} className="flex-shrink-0" />
-                  {errorTomar}
-                </p>
-              )}
-
-              <div className="flex flex-col gap-2 pt-2">
-                <button
-                  onClick={handleConfirmarTomar}
-                  disabled={!selectedPerson || submittingTomar}
-                  className="
-                    w-full h-12 flex items-center justify-center gap-2
-                    bg-blue-700 text-white text-sm font-semibold rounded-xl
-                    active:scale-[0.98] active:bg-blue-800
-                    disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100
-                    transition-all duration-150 select-none touch-manipulation
-                  "
-                >
-                  {submittingTomar ? (
-                    <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    'Confirmar préstamo'
-                  )}
-                </button>
-                <button
-                  onClick={() => setModalTomar(null)}
-                  className="
-                    w-full h-10 text-slate-500 text-sm font-medium
-                    hover:bg-slate-100 rounded-xl transition-colors
-                    select-none touch-manipulation
-                  "
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Modal Devolver Llave */}
-          {modalDevolver && (
-            <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 flex flex-col gap-5">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Confirmar devolución</h2>
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed">
-                  ¿Confirmas que{' '}
-                  <span className="font-bold text-slate-900">
-                    {modalDevolver.activeAssignment?.personName ?? 'el empleado'}
-                  </span>{' '}
-                  devuelve la llave de{' '}
-                  <span className="font-bold text-blue-700">{modalDevolver.name}</span>?
-                </p>
-                {modalDevolver.activeAssignment?.takenAt && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Tomada {tiempoTranscurrido(modalDevolver.activeAssignment.takenAt)}
-                  </p>
+      {confirmTomar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 flex flex-col gap-5 border border-slate-200">
+            <div className="flex items-center gap-3">
+              <div
+                className={`
+                w-12 h-12 rounded-2xl flex items-center justify-center text-xl flex-shrink-0
+                ${confirmTomar.requester.type === 'CLEANING' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}
+              `}
+              >
+                {confirmTomar.requester.type === 'CLEANING' ? (
+                  '🧹'
+                ) : (
+                  <User size={24} />
                 )}
               </div>
-
-              {errorDevolver && (
-                <p className="flex items-center gap-1.5 text-xs text-red-600 font-medium bg-red-50 p-2.5 rounded-xl border border-red-200">
-                  <AlertCircle size={14} className="flex-shrink-0" />
-                  {errorDevolver}
-                </p>
-              )}
-
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={handleConfirmarDevolver}
-                  disabled={submittingDevolver}
-                  className="
-                    w-full h-12 flex items-center justify-center gap-2
-                    bg-blue-700 text-white text-sm font-semibold rounded-xl
-                    active:scale-[0.98] active:bg-blue-800
-                    disabled:opacity-50 transition-all duration-150 select-none touch-manipulation
-                  "
-                >
-                  {submittingDevolver ? (
-                    <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    'Confirmar devolución'
-                  )}
-                </button>
-                <button
-                  onClick={() => setModalDevolver(null)}
-                  className="
-                    w-full h-10 text-slate-500 text-sm font-medium
-                    hover:bg-slate-100 rounded-xl transition-colors
-                    select-none touch-manipulation
-                  "
-                >
-                  Cancelar
-                </button>
+              <div className="min-w-0 flex-1">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Confirmar Préstamo
+                </span>
+                <h2 className="text-xl font-bold text-slate-900 leading-tight">
+                  {confirmTomar.key.name}
+                </h2>
               </div>
             </div>
-          )}
+
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 flex flex-col gap-1.5">
+              <p className="text-xs text-slate-500 font-semibold uppercase tracking-wider">
+                Solicitante:
+              </p>
+              <p className="text-base font-bold text-slate-900">
+                {confirmTomar.requester.fullName}
+              </p>
+              {confirmTomar.requester.position && (
+                <p className="text-xs text-slate-600 font-medium">
+                  {confirmTomar.requester.position} · {confirmTomar.requester.department}
+                </p>
+              )}
+            </div>
+
+            <p className="text-sm text-slate-600 leading-relaxed">
+              ¿Confirmas que{' '}
+              <strong className="text-slate-900">
+                {confirmTomar.requester.fullName}
+              </strong>{' '}
+              toma la llave de{' '}
+              <strong className="text-blue-700">{confirmTomar.key.name}</strong>?
+            </p>
+
+            {errorTomar && (
+              <p className="flex items-center gap-1.5 text-xs text-red-600 font-medium bg-red-50 p-2.5 rounded-xl border border-red-200">
+                <AlertCircle size={14} className="flex-shrink-0" />
+                {errorTomar}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={handleConfirmarTomar}
+                disabled={submittingTomar}
+                className="
+                  w-full h-12 flex items-center justify-center gap-2
+                  bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-xl
+                  active:scale-[0.98]
+                  disabled:opacity-50 transition-all duration-150 select-none touch-manipulation
+                "
+              >
+                {submittingTomar ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  'Confirmar y tomar llave'
+                )}
+              </button>
+              <button
+                onClick={() => {
+                  setConfirmTomar(null);
+                  setKeyToTake(null);
+                }}
+                className="
+                  w-full h-10 text-slate-500 hover:text-slate-800 text-sm font-medium
+                  hover:bg-slate-100 rounded-xl transition-colors
+                  select-none touch-manipulation
+                "
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {modalDevolver && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl p-6 flex flex-col gap-5 border border-slate-200">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                Confirmar Devolución
+              </span>
+              <h2 className="text-xl font-bold text-slate-900 mt-1">
+                {modalDevolver.name}
+              </h2>
+              <p className="text-sm text-slate-600 mt-3 leading-relaxed">
+                ¿Confirmas que{' '}
+                <span className="font-bold text-slate-900">
+                  {modalDevolver.activeAssignment?.requesterName ?? 'el solicitante'}
+                </span>{' '}
+                devuelve la llave de{' '}
+                <span className="font-bold text-blue-700">{modalDevolver.name}</span>?
+              </p>
+              {modalDevolver.activeAssignment?.takenAt && (
+                <p className="text-xs text-slate-400 mt-2">
+                  Tomada {tiempoTranscurrido(modalDevolver.activeAssignment.takenAt)}
+                </p>
+              )}
+            </div>
+
+            {errorDevolver && (
+              <p className="flex items-center gap-1.5 text-xs text-red-600 font-medium bg-red-50 p-2.5 rounded-xl border border-red-200">
+                <AlertCircle size={14} className="flex-shrink-0" />
+                {errorDevolver}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-2 pt-1">
+              <button
+                onClick={handleConfirmarDevolver}
+                disabled={submittingDevolver}
+                className="
+                  w-full h-12 flex items-center justify-center gap-2
+                  bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-xl
+                  active:scale-[0.98]
+                  disabled:opacity-50 transition-all duration-150 select-none touch-manipulation
+                "
+              >
+                {submittingDevolver ? (
+                  <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  'Confirmar devolución'
+                )}
+              </button>
+              <button
+                onClick={() => setModalDevolver(null)}
+                className="
+                  w-full h-10 text-slate-500 hover:text-slate-800 text-sm font-medium
+                  hover:bg-slate-100 rounded-xl transition-colors
+                  select-none touch-manipulation
+                "
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -421,7 +402,9 @@ function LlaveCard({
   onDevolver: () => void;
 }) {
   const disponible = llave.status === 'AVAILABLE';
-  const personName = llave.activeAssignment?.personName;
+  const requesterName = llave.activeAssignment?.requesterName;
+  const requesterDetail = llave.activeAssignment?.requesterDetail;
+  const isCleaning = llave.activeAssignment?.requesterType === 'CLEANING';
   const takenAt = llave.activeAssignment?.takenAt;
 
   return (
@@ -435,10 +418,10 @@ function LlaveCard({
         <div
           className={`
           w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-xl
-          ${disponible ? 'bg-slate-100 text-slate-500' : 'bg-red-100 text-red-600'}
+          ${disponible ? 'bg-slate-100 text-slate-500' : isCleaning ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-600'}
         `}
         >
-          <KeyRound size={20} />
+          {isCleaning ? <span className="text-xl">🧹</span> : <KeyRound size={20} />}
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-slate-800 leading-tight truncate">{llave.name}</p>
@@ -454,11 +437,27 @@ function LlaveCard({
         </div>
       </div>
 
-      {!disponible && personName && (
-        <div className="bg-red-50 rounded-xl px-3 py-2 border border-red-100">
-          <p className="text-xs font-semibold text-slate-700 truncate">{personName}</p>
+      {!disponible && requesterName && (
+        <div
+          className={`
+          rounded-xl px-3 py-2 border
+          ${isCleaning ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-100'}
+        `}
+        >
+          <div className="flex items-center gap-1.5">
+            <p className="text-xs font-bold text-slate-800 truncate">{requesterName}</p>
+            {isCleaning && (
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-200 text-amber-900">
+                <Sparkles size={8} />
+                Servicio
+              </span>
+            )}
+          </div>
+          {requesterDetail && (
+            <p className="text-[11px] text-slate-500 truncate mt-0.5">{requesterDetail}</p>
+          )}
           {takenAt && (
-            <p className="text-xs text-slate-400 mt-0.5" suppressHydrationWarning>
+            <p className="text-xs text-slate-400 mt-0.5 font-medium" suppressHydrationWarning>
               {tiempoTranscurrido(takenAt)}
               <span className="hidden">{tick}</span>
             </p>
@@ -471,9 +470,9 @@ function LlaveCard({
           onClick={onTomar}
           className="
             w-full h-11 flex items-center justify-center
-            bg-blue-700 text-white text-sm font-semibold rounded-xl
-            active:scale-[0.97] active:bg-blue-800
-            transition-all duration-150 select-none touch-manipulation
+            bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-xl
+            active:scale-[0.97]
+            transition-all duration-150 select-none touch-manipulation shadow-sm
           "
         >
           Tomar
@@ -483,8 +482,8 @@ function LlaveCard({
           onClick={onDevolver}
           className="
             w-full h-11 flex items-center justify-center
-            bg-slate-200 text-slate-700 text-sm font-semibold rounded-xl
-            active:scale-[0.97] active:bg-slate-300
+            bg-slate-200 hover:bg-slate-300 text-slate-800 text-sm font-semibold rounded-xl
+            active:scale-[0.97]
             transition-all duration-150 select-none touch-manipulation
           "
         >

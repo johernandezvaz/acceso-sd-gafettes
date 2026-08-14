@@ -14,14 +14,17 @@ admins_entrada.csv
 LISTADO ADMIS 14 08 26.xls
 prompt.md
 AGENTS.md
-
+CLAUDE.md
+safe_visitor_main_redesign.html
+preview.png
+test/
+/test
 
 # testing
 /coverage
 # next.js
 /.next/
 /out/
-
 # production
 /build
 
