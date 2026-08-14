@@ -14,12 +14,22 @@ import {
   Printer,
   CheckCircle2,
   ChevronDown,
+  Download,
+  Copy,
+  Check,
 } from 'lucide-react';
 import StatusBar from '@/components/ui/StatusBar';
 import GafeteVisitante from '@/components/GafeteVisitante';
 import { SYSTEM_NAME, ROUTES } from '@/lib/constants';
 import { createVisitor, type VisitHostOption } from '@/app/actions/visitors';
 import VisitHostPicker from '@/components/ui/VisitHostPicker';
+import { generateVisitorBadgeZpl } from '@/lib/printing/visitorBadgeZpl';
+import {
+  sendToZebraBrowserPrint,
+  downloadZplFile,
+  copyZplToClipboard,
+} from '@/lib/printing/zebraPrintService';
+
 
 
 interface FormData {
@@ -76,6 +86,9 @@ export default function NuevoVisitantePage() {
   const [visitaALabel, setVisitaALabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const [printStatus, setPrintStatus] = useState<string | null>(null);
+  const [zplCopied, setZplCopied] = useState(false);
 
   const [form, setForm] = useState<FormData>({
     company: '',
@@ -87,9 +100,49 @@ export default function NuevoVisitantePage() {
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Partial<Record<keyof FormData, boolean>>>({});
 
-  const handleImprimir = () => {
-    window.print();
-    setTimeout(() => router.push(ROUTES.home), 1000);
+  const getBadgeZpl = () => {
+    return generateVisitorBadgeZpl({
+      folio: folioRegistro,
+      nombre: form.fullName,
+      empresa: form.company,
+      visitaA: visitaALabel,
+      motivo: form.reason,
+      identificacion: form.idType,
+      fechaHora: fechaRegistro || new Date().toISOString(),
+    });
+  };
+
+  const handleImprimirZebra = async () => {
+    const zpl = getBadgeZpl();
+    setIsPrinting(true);
+    setPrintStatus('Enviando a impresora Zebra...');
+
+    const res = await sendToZebraBrowserPrint(zpl);
+    setIsPrinting(false);
+
+    if (res.success) {
+      setPrintStatus('¡Gafete impreso correctamente!');
+      setTimeout(() => router.push(ROUTES.home), 1200);
+    } else {
+      downloadZplFile(zpl, `gafete-${folioRegistro || 'visitante'}.zpl`);
+      setPrintStatus('Archivo .ZPL descargado (Zebra Browser Print no detectado en el equipo local)');
+    }
+  };
+
+  const handleDescargarZpl = () => {
+    const zpl = getBadgeZpl();
+    downloadZplFile(zpl, `gafete-${folioRegistro || 'visitante'}.zpl`);
+    setPrintStatus('Archivo .ZPL descargado');
+  };
+
+  const handleCopiarZpl = async () => {
+    const zpl = getBadgeZpl();
+    const ok = await copyZplToClipboard(zpl);
+    if (ok) {
+      setZplCopied(true);
+      setPrintStatus('Código ZPL copiado al portapapeles');
+      setTimeout(() => setZplCopied(false), 2500);
+    }
   };
 
   const handleChange = (field: keyof FormData, value: string) => {
@@ -336,15 +389,25 @@ export default function NuevoVisitantePage() {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.65)',
+            background: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(6px)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 24,
+            gap: 20,
             zIndex: 50,
+            padding: '16px',
           }}
         >
+          <div className="text-center mb-1">
+            <span className="text-xs uppercase tracking-widest text-emerald-400 font-bold bg-emerald-950/70 border border-emerald-500/30 px-3 py-1 rounded-full">
+              Registro completado
+            </span>
+            <h3 className="text-white text-xl font-bold mt-2">Gafete de visitante (ZPL)</h3>
+            <p className="text-slate-300 text-xs mt-0.5">Formato Zebra 84.5 × 53 mm</p>
+          </div>
+
           <GafeteVisitante
             folio={folioRegistro}
             nombre={form.fullName}
@@ -355,25 +418,71 @@ export default function NuevoVisitantePage() {
             fechaHora={fechaRegistro}
           />
 
-          <button
-            onClick={handleImprimir}
-            className="
-              flex items-center gap-2
-              bg-white text-slate-900 font-semibold
-              px-8 py-3 rounded-xl text-base shadow-lg
-              active:scale-[0.97] transition-transform
-              select-none touch-manipulation
-            "
-          >
-            <Printer size={18} />
-            Imprimir gafete
-          </button>
+          {printStatus && (
+            <div className="bg-slate-800/90 border border-slate-700 text-slate-200 text-xs px-4 py-2 rounded-xl max-w-sm text-center shadow-lg animate-fade-in">
+              {printStatus}
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full max-w-md justify-center">
+            <button
+              onClick={handleImprimirZebra}
+              disabled={isPrinting}
+              className="
+                flex items-center justify-center gap-2
+                w-full sm:w-auto flex-1
+                bg-emerald-600 hover:bg-emerald-500 text-white font-bold
+                px-6 py-3.5 rounded-xl text-sm shadow-xl shadow-emerald-950/30
+                active:scale-[0.97] transition-all
+                select-none touch-manipulation disabled:opacity-50
+              "
+            >
+              {isPrinting ? (
+                <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Printer size={18} />
+              )}
+              Imprimir en Zebra
+            </button>
+
+            <button
+              onClick={handleDescargarZpl}
+              className="
+                flex items-center justify-center gap-2
+                w-full sm:w-auto
+                bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold
+                px-4 py-3.5 rounded-xl text-xs border border-slate-600/60
+                active:scale-[0.97] transition-all
+                select-none touch-manipulation
+              "
+              title="Descargar archivo .zpl para envío directo o Zebra Setup Utilities"
+            >
+              <Download size={15} />
+              Descargar .ZPL
+            </button>
+
+            <button
+              onClick={handleCopiarZpl}
+              className="
+                flex items-center justify-center gap-2
+                w-full sm:w-auto
+                bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold
+                px-4 py-3.5 rounded-xl text-xs border border-slate-600/60
+                active:scale-[0.97] transition-all
+                select-none touch-manipulation
+              "
+              title="Copiar código ZPL al portapapeles"
+            >
+              {zplCopied ? <Check size={15} className="text-emerald-400" /> : <Copy size={15} />}
+              {zplCopied ? 'Copiado' : 'Copiar ZPL'}
+            </button>
+          </div>
 
           <button
             onClick={() => router.push(ROUTES.home)}
-            className="text-white/60 text-sm select-none touch-manipulation active:text-white transition-colors"
+            className="text-white/60 text-sm font-medium select-none touch-manipulation hover:text-white active:text-white transition-colors mt-1"
           >
-            Omitir e ir al inicio
+            Finalizar e ir al inicio
           </button>
         </div>
       )}

@@ -75,10 +75,9 @@ El archivo `safe_visitor_main_redesign.html` en la raíz es un **prototipo HTML 
 ```text
 sistema-entrada/
 ├── app/                          # App Router de Next.js (rutas = directorios)
-│   ├── layout.tsx                # Layout raíz: fuente Inter, metadatos globales
+│   ├── layout.tsx                # Layout raíz: fuente Inter, metadatos e iconos globales
 │   ├── page.tsx                  # Pantalla principal (home / dashboard)
 │   ├── globals.css               # Estilos globales + tokens CSS + print media query
-│   ├── favicon.ico
 │   ├── visitante/
 │   │   └── nuevo/
 │   │       └── page.tsx          # Registro de nuevo visitante (formulario + gafete)
@@ -99,7 +98,7 @@ sistema-entrada/
 │           └── page.tsx          # Registro de personal de seguridad
 │
 ├── components/
-│   ├── GafeteVisitante.tsx       # Componente de gafete imprimible (56x85.6mm)
+│   ├── GafeteVisitante.tsx       # Componente de preview de gafete (84.5x53mm)
 │   ├── modals/
 │   │   └── RegistroGeneralModal.tsx  # Modal reutilizable entrada/salida de personal
 │   └── ui/
@@ -109,9 +108,14 @@ sistema-entrada/
 │       └── StatusBar.tsx         # Barra inferior con reloj, versión y empresa
 │
 ├── lib/
-│   └── constants.ts              # Constantes globales: SYSTEM_NAME, ROUTES, COLORS
+│   ├── constants.ts              # Constantes globales: SYSTEM_NAME, ROUTES, COLORS
+│   └── printing/
+│       ├── visitorBadgeZpl.ts    # Generador ZPL calibrado para etiquetas 84.5x53mm (203/300 DPI)
+│       ├── zebraPrintService.ts  # Servicio de transporte ZPL (Zebra Browser Print, descarga, portapapeles)
+│       └── logoData.json         # Mapas de bits monocromáticos del logo Safe Demo para ^GFA
 │
 ├── public/
+│   ├── favicon_io/               # Iconos y manifiesto de la aplicación (favicon, apple-touch-icon, webmanifest)
 │   └── safe-demo_logo-blc-Photoroom.png  # Logo del sistema
 │
 ├── AGENTS.md                     # Reglas para agentes de IA
@@ -302,7 +306,7 @@ Lógica: nombre completo (validado) + toggle Entrada/Salida + Toast de confirmac
 
 ### `components/GafeteVisitante.tsx`
 
-Gafete físico imprimible. Dimensiones: **56mm × 85.6mm**.
+Preview visual del gafete físico adaptado a proporción real **84.5 mm × 53 mm** (landscape).
 
 ```typescript
 Props: {
@@ -310,17 +314,19 @@ Props: {
   nombre: string;
   empresa: string;
   visitaA: string;
-  motivo: string;         // clave del MOTIVOS map (ej. "servicio")
-  identificacion: string; // clave del IDS map (ej. "ine")
-  fechaHora: string;      // ISO string
+  motivo: string;
+  identificacion: string;
+  fechaHora: string | Date;
 }
 ```
 
-Estructura (top → bottom): header logo + badge "VISITANTE" | nombre + empresa + folio | datos (visita a / motivo / ID) | fecha + QR (40px).
+Estructura idéntica al diseño ZPL (top → bottom):
+- Barra negra superior
+- Header: Logo Safe Demo + badge "VISITANTE"
+- Sección principal: Nombre + Empresa + Folio
+- Sección secundaria: Visita a + Motivo + Identificación
+- Footer: Fecha/hora (`DD/MM/YYYY · HH:mm`) + Código QR (`^BQN`)
 
-QR contiene: `JSON.stringify({ folio, nombre, empresa, fecha: fechaHora })`.
-
-**El ID raíz es `gafete-print`** — acoplado con `@media print` en `globals.css`. No cambiar sin actualizar el CSS.
 
 ---
 
@@ -540,15 +546,36 @@ El control de acceso al sistema es físico/operativo (quién tiene acceso al dis
 
 ---
 
-## 13. Sistema de impresión de gafetes
+## 13. Sistema de impresión de gafetes (ZPL / Zebra)
 
-1. `<GafeteVisitante>` se renderiza con `id="gafete-print"`.
-2. `window.print()` activa `@media print` en `globals.css`.
-3. Todo el `body` se oculta excepto `#gafete-print`.
-4. Impresión en `56mm × 85.6mm`.
-5. `setTimeout(1000ms)` → `router.push(ROUTES.home)`.
+CODA utiliza **ZPL (Zebra Programming Language)** para imprimir los gafetes físicos directamente en impresoras térmicas Zebra compatibles.
 
-QR codifica: `{ folio, nombre, empresa, fecha }` en JSON.
+### Dimensiones físicas de la etiqueta
+- **Ancho:** 84.5 mm
+- **Alto:** 53.0 mm
+- **Orientación:** Landscape (horizontal)
+
+### Cálculo de Dots según DPI
+La conversión milímetros a dots se calcula con:
+$$\text{dots} = \text{round}\left(\frac{\text{mm}}{25.4} \times \text{DPI}\right)$$
+
+| Resolución | Ancho (`^PW`) | Alto (`^LL`) | Densidad (`dpmm`) | Modelos de ejemplo |
+|---|---|---|---|---|
+| **203 DPI** (Default) | **675 dots** | **424 dots** | 8 dots/mm | Zebra ZD220, ZD230, ZD420 (203dpi), GK420d |
+| **300 DPI** | **998 dots** | **626 dots** | 12 dots/mm | Zebra ZD420-300, ZD620-300 |
+
+### Generador ZPL (`lib/printing/visitorBadgeZpl.ts`)
+- **Logo Bitmap (`^GFA`):** Convierte el logotipo oficial a mapa de bits monocromático 1-bit nítido y proporcional.
+- **Código QR Nativo (`^BQN`):** Genera código QR con modelo 2 y corrección de error M conteniendo `{ folio, nombre, empresa, fecha }`.
+- **Text Wrapping (`^FB`):** Maneja nombres o empresas largas mediante bloques de campo con control de desbordamiento.
+- **Sanitización:** Escapa caracteres de control ZPL (`^`, `~`, `\`) y maneja UTF-8 con `^CI28`.
+
+### Mecanismos de envío / Transporte ZPL (`lib/printing/zebraPrintService.ts`)
+1. **Zebra Browser Print:** Intenta comunicación directa mediante el agente oficial Zebra Browser Print (`http://127.0.0.1:9100/write`).
+2. **Descarga de archivo `.zpl`:** Descarga automática o manual del archivo de comandos para envío por USB, cola de impresión o Zebra Setup Utilities.
+3. **Copiado al Portapapeles:** Para pruebas rápidas en simuladores o envío por terminal.
+4. **Envío de red directo (opcional):** Mediante socket TCP al puerto 9100 de la impresora en red local.
+
 
 ---
 
@@ -792,15 +819,17 @@ Formulario (5 campos)
        ↓
 Validación (touched + errors pattern)
        ↓
-handleRegistrar() → validateForm() → confirmRegistration()
+handleRegistrar() → validateForm() → createVisitor() en DB
        ↓
-Genera folio (Date.now().slice(-5))
+Generación de Folio y persistencia
        ↓
-Overlay con <GafeteVisitante> (QR + datos)
+Overlay con <GafeteVisitante> (Preview 84.5 × 53 mm)
        ↓
-window.print() → @media print → impresión 56x85.6mm
+generateVisitorBadgeZpl(data, { dpi: 203 })
        ↓
-setTimeout(1000) → router.push(ROUTES.home)
+Envío ZPL (Zebra Browser Print / Descarga .ZPL / Copiar ZPL)
+       ↓
+Finalizar → router.push(ROUTES.home)
 ```
 
 ---

@@ -1,33 +1,18 @@
+'use client';
+
 import React from 'react';
 import Image from 'next/image';
 import { QRCodeSVG } from 'qrcode.react';
+import {
+  MOTIVOS_MAP,
+  IDENTIFICACIONES_MAP,
+  formatBadgeDate,
+  type VisitorBadgeData,
+} from '@/lib/printing/visitorBadgeZpl';
 
-export interface GafeteVisitanteProps {
-  folio: string;
-  nombre: string;
-  empresa: string;
-  visitaA: string;
-  motivo: string;
-  identificacion: string;
-  fechaHora: string;
+export interface GafeteVisitanteProps extends VisitorBadgeData {
+  className?: string;
 }
-
-const MOTIVOS: Record<string, string> = {
-  practicas: 'Prácticas',
-  prueba_sistema: 'Prueba de sistema',
-  revision_proyecto: 'Revisión de proyecto',
-  servicio: 'Servicio',
-  visita_cliente: 'Visita cliente',
-  visita_corporativo: 'Visita corporativo',
-  visita_proveedor: 'Visita de proveedor',
-};
-
-const IDS: Record<string, string> = {
-  ine: 'INE',
-  pasaporte: 'Pasaporte',
-  licencia: 'Licencia de conducir',
-  gafete_empresa: 'Gafete de empresa',
-};
 
 export default function GafeteVisitante({
   folio,
@@ -37,102 +22,207 @@ export default function GafeteVisitante({
   motivo,
   identificacion,
   fechaHora,
+  className = '',
 }: GafeteVisitanteProps) {
-  const fecha = new Date(fechaHora);
-  const fechaFormateada =
-    fecha.toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
-    ' · ' +
-    fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const fechaTexto = formatBadgeDate(fechaHora);
+  const motivoLabel = MOTIVOS_MAP[motivo] ?? motivo;
+  const idLabel = IDENTIFICACIONES_MAP[identificacion] ?? identificacion;
 
-  const motivoLabel = MOTIVOS[motivo] ?? motivo;
-  const idLabel = IDS[identificacion] ?? identificacion;
-
-  const qrData = JSON.stringify({ folio, nombre, empresa, fecha: fechaHora });
+  const fechaIso = typeof fechaHora === 'string' ? fechaHora : fechaHora.toISOString();
+  const qrData = JSON.stringify({
+    folio,
+    nombre: nombre.trim().toUpperCase(),
+    empresa: empresa.trim(),
+    fecha: fechaIso,
+  });
 
   return (
-    <div id="gafete-print">
-
+    <div id="gafete-print" className={className}>
+      {/* 
+        Contenedor del gafete ajustado a la proporción física 84.5 mm x 53 mm (ratio ~1.594)
+        Ancho preview: 380px, Alto: 238px (~1.594)
+      */}
       <div
         className="badge-inner"
         style={{
-          width: '212px',
-          background: '#fff',
-          border: '1.5px solid #d1d5db',
+          width: '380px',
+          height: '238px',
+          background: '#ffffff',
+          border: '1.5px solid #cbd5e1',
           borderRadius: '8px',
           overflow: 'hidden',
-          fontFamily: 'Arial, sans-serif',
-          color: '#000',
-          fontSize: '11px',
+          fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          color: '#0f172a',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
+          boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1)',
+          position: 'relative',
         }}
       >
-        <div style={{
-          borderTop: '6px solid #000',
-          padding: '10px 14px 8px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <Image
-            src="/safe-demo_logo-blc-Photoroom.png"
-            alt="Logo"
-            width={48}
-            height={24}
-            style={{ objectFit: 'contain' }}
-          />
-          <span style={{
-            fontSize: '9px',
-            fontWeight: '700',
-            letterSpacing: '0.12em',
-            textTransform: 'uppercase',
-            border: '1.5px solid #000',
-            padding: '3px 8px',
-            borderRadius: '3px',
-          }}>
+        {/* Barra superior oscura idéntica a ZPL */}
+        <div style={{ height: '5px', background: '#000000', width: '100%' }} />
+
+        {/* HEADER: Logo y Etiqueta 'VISITANTE' */}
+        <div
+          style={{
+            padding: '8px 16px 6px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <div style={{ position: 'relative', width: '70px', height: '32px' }}>
+            <Image
+              src="/safe-demo_logo-blc-Photoroom.png"
+              alt="Safe Demo Logo"
+              fill
+              sizes="70px"
+              style={{ objectFit: 'contain' }}
+              priority
+            />
+          </div>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: '800',
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              border: '1.5px solid #000000',
+              padding: '3px 10px',
+              borderRadius: '4px',
+              lineHeight: 1,
+            }}
+          >
             Visitante
           </span>
         </div>
 
-        <div style={{
-          padding: '10px 14px',
-          borderTop: '1px solid #e5e7eb',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '3px',
-        }}>
-          <span style={{ fontSize: '14px', fontWeight: '700', lineHeight: '1.2', textTransform: 'uppercase' }}>
+        <div
+          style={{
+            padding: '6px 16px',
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '14px',
+              fontWeight: '800',
+              lineHeight: '1.2',
+              textTransform: 'uppercase',
+              color: '#000000',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
             {nombre}
           </span>
-          <span style={{ fontSize: '10px', color: '#4b5563' }}>{empresa}</span>
-          <span style={{ fontSize: '10px', fontWeight: '700', marginTop: '3px', letterSpacing: '0.05em' }}>
+          <span
+            style={{
+              fontSize: '11px',
+              color: '#475569',
+              fontWeight: '500',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {empresa}
+          </span>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: '800',
+              letterSpacing: '0.05em',
+              color: '#0f172a',
+              marginTop: '1px',
+            }}
+          >
             FOLIO #{folio}
           </span>
         </div>
 
-        <div style={{ padding: '8px 14px', borderTop: '1px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+        <div
+          style={{
+            padding: '5px 16px',
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+          }}
+        >
           {[
-            { label: 'Visita a', value: visitaA || '—' },
-            { label: 'Motivo', value: motivoLabel },
-            { label: 'Identificación', value: idLabel },
+            { label: 'Visita a:', value: visitaA || '—' },
+            { label: 'Motivo:', value: motivoLabel },
+            { label: 'Identificación:', value: idLabel },
           ].map(({ label, value }) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}>
-              <span style={{ color: '#6b7280', fontSize: '9px', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>
+            <div
+              key={label}
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                gap: '8px',
+                alignItems: 'baseline',
+              }}
+            >
+              <span
+                style={{
+                  color: '#64748b',
+                  fontSize: '9.5px',
+                  fontWeight: '700',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.04em',
+                  flexShrink: 0,
+                  width: '90px',
+                }}
+              >
                 {label}
               </span>
-              <span style={{ fontSize: '10px', fontWeight: '600', textAlign: 'right', wordBreak: 'break-word' }}>
+              <span
+                style={{
+                  fontSize: '10.5px',
+                  fontWeight: '600',
+                  color: '#1e293b',
+                  textAlign: 'left',
+                  flex: 1,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {value}
               </span>
             </div>
           ))}
         </div>
 
-        <div style={{ padding: '8px 14px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-          <span style={{ fontSize: '9px', color: '#4b5563' }}>{fechaFormateada}</span>
+        <div
+          style={{
+            padding: '6px 16px 8px',
+            borderTop: '1px solid #e2e8f0',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: '#fafafa',
+          }}
+        >
+          <span
+            style={{
+              fontSize: '10.5px',
+              color: '#475569',
+              fontWeight: '600',
+              letterSpacing: '0.02em',
+            }}
+          >
+            {fechaTexto}
+          </span>
           <QRCodeSVG
             value={qrData}
-            size={40}
+            size={44}
             level="M"
             style={{ display: 'block', flexShrink: 0 }}
           />
