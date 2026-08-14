@@ -1,29 +1,19 @@
 'use client';
 
-import { useState, useEffect, useId } from 'react';
-import { X, AlertCircle, CircleCheck, CircleArrowOutUpRight } from 'lucide-react';
-
-
-const isValidFullName = (name: string) => {
-  const parts = name.trim().split(/\s+/).filter((p) => p.length >= 2);
-  return parts.length >= 2;
-};
-
-
-const inputBase =
-  'w-full h-14 px-4 text-base rounded-xl border-2 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 transition-colors appearance-none';
-const inputNormal = `${inputBase} border-slate-200 focus:border-blue-500 focus:ring-blue-500`;
-const inputErr = `${inputBase} border-red-400 focus:border-red-400 focus:ring-red-400`;
-
+import { useState, useEffect } from 'react';
+import { X, CircleCheck, CircleArrowOutUpRight, AlertCircle } from 'lucide-react';
+import PersonCombobox from '@/components/admin/PersonCombobox';
+import { getActivePeople, type PersonOption } from '@/app/actions/people';
+import { registerAccess } from '@/app/actions/access';
 
 export interface Props {
   titulo: string;
   subtitulo: string;
   labelBoton?: string;
+  personTypeSlug?: string;
   onSuccess: () => void;
   onClose: () => void;
 }
-
 
 function horaActual() {
   return new Date().toLocaleTimeString('es-MX', {
@@ -32,7 +22,6 @@ function horaActual() {
     hour12: true,
   });
 }
-
 
 interface ToastProps {
   tipo: 'entrada' | 'salida';
@@ -43,7 +32,6 @@ interface ToastProps {
 
 function Toast({ tipo, nombre, hora, visible }: ToastProps) {
   const esEntrada = tipo === 'entrada';
-
   return (
     <div
       className="fixed inset-0 z-[9999] flex items-center justify-center transition-all duration-200"
@@ -65,7 +53,6 @@ function Toast({ tipo, nombre, hora, visible }: ToastProps) {
         ) : (
           <CircleArrowOutUpRight size={48} className="text-slate-600" strokeWidth={1.5} />
         )}
-
         <p className="text-xl font-semibold text-slate-900">
           {esEntrada ? 'Entrada registrada' : 'Salida registrada'}
         </p>
@@ -77,32 +64,32 @@ function Toast({ tipo, nombre, hora, visible }: ToastProps) {
   );
 }
 
-
 export default function RegistroGeneralModal({
   titulo,
   subtitulo,
+  personTypeSlug,
   onSuccess,
   onClose,
 }: Props) {
-  const uid = useId();
-  const idNombre = `${uid}-nombre`;
-
-  const [nombre, setNombre] = useState('');
+  const [people, setPeople] = useState<PersonOption[]>([]);
+  const [loadingPeople, setLoading] = useState(true);
+  const [selectedPerson, setSelected] = useState<PersonOption | null>(null);
   const [tipo, setTipo] = useState<'entrada' | 'salida' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [showToast, setShowToast] = useState(false);
   const [toastHora, setToastHora] = useState('');
 
-  useEffect(() => () => {
-    setNombre('');
-    setTipo(null);
-    setError(null);
-    setShowToast(false);
-  }, []);
+  useEffect(() => {
+    getActivePeople(personTypeSlug).then((data) => {
+      setPeople(data);
+      setLoading(false);
+    });
+  }, [personTypeSlug]);
 
-  const handleSubmit = () => {
-    if (!isValidFullName(nombre)) {
-      setError('Ingresa nombre y apellido completos');
+  const handleSubmit = async () => {
+    if (!selectedPerson) {
+      setError('Selecciona una persona');
       return;
     }
     if (!tipo) {
@@ -110,7 +97,21 @@ export default function RegistroGeneralModal({
       return;
     }
 
-    console.log({ nombre, tipo });
+    setSubmitting(true);
+    setError(null);
+
+    const result = await registerAccess(
+      selectedPerson.id,
+      tipo === 'entrada' ? 'ENTRY' : 'EXIT'
+    );
+
+    setSubmitting(false);
+
+    if (!result.success) {
+      setError(result.error ?? 'Error al registrar');
+      return;
+    }
+
     setToastHora(horaActual());
     setShowToast(true);
 
@@ -141,26 +142,25 @@ export default function RegistroGeneralModal({
           <div className="px-6 py-6 flex flex-col gap-5">
 
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2" htmlFor={idNombre}>
-                Nombre completo <span className="text-red-500">*</span>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Persona <span className="text-red-500">*</span>
               </label>
-              <input
-                id={idNombre}
-                type="text"
-                placeholder="Nombre y apellidos"
-                value={nombre}
-                onChange={(e) => {
-                  setNombre(e.target.value);
-                  if (error) setError(null);
-                }}
-                className={error ? inputErr : inputNormal}
-                autoComplete="name"
-              />
-              {error && (
-                <p className="flex items-center gap-1.5 mt-1.5 text-sm text-red-600 font-medium">
-                  <AlertCircle size={13} className="flex-shrink-0" />
-                  {error}
-                </p>
+              {loadingPeople ? (
+                <div className="h-14 rounded-xl border-2 border-slate-200 bg-slate-50 flex items-center justify-center">
+                  <span className="text-xs text-slate-400">Cargando personal...</span>
+                </div>
+              ) : people.length === 0 ? (
+                <div className="h-14 rounded-xl border-2 border-amber-200 bg-amber-50 flex items-center justify-center">
+                  <span className="text-xs text-amber-700 font-medium">
+                    No hay personal registrado en esta categoría
+                  </span>
+                </div>
+              ) : (
+                <PersonCombobox
+                  people={people}
+                  value={selectedPerson?.id ?? null}
+                  onChange={(p) => { setSelected(p); if (error) setError(null); }}
+                />
               )}
             </div>
 
@@ -198,29 +198,43 @@ export default function RegistroGeneralModal({
               </div>
             </div>
 
+            {error && (
+              <p className="flex items-center gap-1.5 text-sm text-red-600 font-medium">
+                <AlertCircle size={13} className="flex-shrink-0" />
+                {error}
+              </p>
+            )}
+
             <button
               onClick={handleSubmit}
-              disabled={!tipo}
+              disabled={!tipo || !selectedPerson || submitting}
               className="
                 w-full h-14 rounded-xl
                 bg-blue-700 text-white font-semibold text-base
                 disabled:opacity-40 disabled:cursor-not-allowed
                 active:scale-[0.98] active:bg-blue-800
                 transition-all duration-150 select-none touch-manipulation
+                flex items-center justify-center gap-2
               "
             >
-              {tipo === 'entrada' && 'Registrar entrada'}
-              {tipo === 'salida' && 'Registrar salida'}
-              {!tipo && 'Selecciona entrada o salida'}
+              {submitting ? (
+                <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  {tipo === 'entrada' && 'Registrar entrada'}
+                  {tipo === 'salida' && 'Registrar salida'}
+                  {!tipo && 'Selecciona entrada o salida'}
+                </>
+              )}
             </button>
           </div>
         </div>
       </div>
 
-      {(showToast || true) && tipo && (
+      {showToast && tipo && (
         <Toast
           tipo={tipo}
-          nombre={nombre}
+          nombre={selectedPerson?.fullName ?? ''}
           hora={toastHora}
           visible={showToast}
         />

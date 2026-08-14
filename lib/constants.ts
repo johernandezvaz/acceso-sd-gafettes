@@ -24,4 +24,12 @@ export const ROUTES = {
   personalMedico: "/personal/medico",
   limpieza: "/personal/limpieza",
   seguridad: "/personal/seguridad",
+  adminLogin:          "/admin/login",
+  adminChangePassword: "/admin/change-password",
+  adminDashboard:      "/admin/dashboard",
+  adminPersonal:       "/admin/personal",
+  adminRegistros:      "/admin/registros",
+  adminVisitantes:     "/admin/visitantes",
+  adminUsuarios:       "/admin/usuarios",
+  adminLogs:           "/admin/logs",
 } as const;

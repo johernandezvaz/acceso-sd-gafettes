@@ -86,6 +86,7 @@ export default function LimpiezaPage() {
       <RegistroGeneralModal
         titulo="Limpieza"
         subtitulo="Registro de entrada y salida de personal de limpieza"
+        personTypeSlug="limpieza"
         labelBoton="Registrar movimiento"
         onSuccess={() => router.push(ROUTES.home)}
         onClose={() => router.push(ROUTES.home)}

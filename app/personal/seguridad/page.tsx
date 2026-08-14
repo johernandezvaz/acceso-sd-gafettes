@@ -86,6 +86,7 @@ export default function SeguridadPage() {
       <RegistroGeneralModal
         titulo="Seguridad"
         subtitulo="Registro de entrada y salida de personal de seguridad"
+        personTypeSlug="seguridad"
         labelBoton="Registrar movimiento"
         onSuccess={() => router.push(ROUTES.home)}
         onClose={() => router.push(ROUTES.home)}

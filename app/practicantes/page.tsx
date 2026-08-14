@@ -86,6 +86,7 @@ export default function PracticantesPage() {
       <RegistroGeneralModal
         titulo="Practicantes"
         subtitulo="Registro de acceso para practicantes y pasantes"
+        personTypeSlug="practicantes"
         labelBoton="Registrar practicante"
         onSuccess={() => router.push(ROUTES.home)}
         onClose={() => router.push(ROUTES.home)}

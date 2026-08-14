@@ -1,0 +1,175 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────
+// ADMIN USERS — usuarios que pueden acceder al panel administrativo
+// ─────────────────────────────────────────────────────────────
+model AdminUser {
+  id                 String    @id @default(cuid())
+  name               String
+  email              String    @unique
+  passwordHash       String    @map("password_hash")
+  role               AdminRole @default(ADMIN)
+  mustChangePassword Boolean   @default(true) @map("must_change_password")
+  active             Boolean   @default(true)
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  auditLogs    AuditLog[]
+
+  @@map("admin_users")
+}
+
+// ─────────────────────────────────────────────────────────────
+// AUDIT LOGS — registro de operaciones administrativas
+// ─────────────────────────────────────────────────────────────
+model AuditLog {
+  id          String    @id @default(cuid())
+  adminUserId String    @map("admin_user_id")
+  action      String    // CREATE_PERSON, UPDATE_PERSON, DEACTIVATE_PERSON, CREATE_ADMIN, etc.
+  entity      String    // Person, AdminUser, VisitHost, etc.
+  entityId    String?   @map("entity_id")
+  metadata    Json?     // datos antes/después del cambio
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id])
+
+  @@index([adminUserId])
+  @@index([action])
+  @@index([entity])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ─────────────────────────────────────────────────────────────
+// PERSON TYPES — tipos de personal (Practicantes, Seguridad, etc.)
+// ─────────────────────────────────────────────────────────────
+model PersonType {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  persons     Person[]
+
+  @@map("person_types")
+}
+
+// ─────────────────────────────────────────────────────────────
+// PERSONS — catálogo de personal registrado
+// ─────────────────────────────────────────────────────────────
+model Person {
+  id           String   @id @default(cuid())
+  fullName     String   @map("full_name")
+  personTypeId String   @map("person_type_id")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  personType   PersonType     @relation(fields: [personTypeId], references: [id])
+  accessRecords AccessRecord[]
+
+  @@index([personTypeId])
+  @@index([active])
+  @@map("persons")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ACCESS RECORDS — registros de entrada/salida de personal
+// ─────────────────────────────────────────────────────────────
+model AccessRecord {
+  id        String     @id @default(cuid())
+  personId  String     @map("person_id")
+  movement  Movement
+  timestamp DateTime   @default(now())
+  createdAt DateTime   @default(now()) @map("created_at")
+
+  person    Person     @relation(fields: [personId], references: [id])
+
+  @@index([personId])
+  @@index([timestamp])
+  @@index([movement])
+  @@map("access_records")
+}
+
+// ─────────────────────────────────────────────────────────────
+// VISITORS — visitantes externos
+// ─────────────────────────────────────────────────────────────
+model Visitor {
+  id                 String   @id @default(cuid())
+  folio              String   @unique
+  fullName           String   @map("full_name")
+  company            String
+  visitTo            String   @map("visit_to")       // nombre del anfitrión (label)
+  visitHostId        String?  @map("visit_host_id")  // referencia al anfitrión
+  reason             String
+  identificationType String   @map("identification_type")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  visitHost          VisitHost?            @relation(fields: [visitHostId], references: [id])
+  accessRecords      VisitorAccessRecord[]
+
+  @@index([folio])
+  @@index([createdAt])
+  @@map("visitors")
+}
+
+// ─────────────────────────────────────────────────────────────
+// VISITOR ACCESS RECORDS — movimientos de visitantes
+// ─────────────────────────────────────────────────────────────
+model VisitorAccessRecord {
+  id        String   @id @default(cuid())
+  visitorId String   @map("visitor_id")
+  movement  Movement
+  timestamp DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
+
+  visitor   Visitor  @relation(fields: [visitorId], references: [id])
+
+  @@index([visitorId])
+  @@index([timestamp])
+  @@map("visitor_access_records")
+}
+
+// ─────────────────────────────────────────────────────────────
+// VISIT HOSTS — personas que pueden recibir visitantes
+// ("A quién visita" en el formulario de visitantes)
+// ─────────────────────────────────────────────────────────────
+model VisitHost {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  position  String?
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  visitors  Visitor[]
+
+  @@index([active])
+  @@map("visit_hosts")
+}
+
+// ─────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────
+enum Movement {
+  ENTRY
+  EXIT
+}
+
+enum AdminRole {
+  ADMIN
+  SUPERADMIN
+}

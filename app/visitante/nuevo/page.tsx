@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -13,16 +13,18 @@ import {
   AlertCircle,
   Printer,
   CheckCircle2,
+  ChevronDown,
 } from 'lucide-react';
 import StatusBar from '@/components/ui/StatusBar';
 import GafeteVisitante from '@/components/GafeteVisitante';
 import { SYSTEM_NAME, ROUTES } from '@/lib/constants';
+import { getVisitHosts, createVisitor, type VisitHostOption } from '@/app/actions/visitors';
 
 
 interface FormData {
   company: string;
   fullName: string;
-  visitsTo: string;
+  visitHostId: string;
   reason: string;
   idType: string;
 }
@@ -30,11 +32,10 @@ interface FormData {
 interface FormErrors {
   company?: string;
   fullName?: string;
-  visitsTo?: string;
+  visitHostId?: string;
   reason?: string;
   idType?: string;
 }
-
 
 const isValidFullName = (name: string) => {
   const parts = name.trim().split(/\s+/).filter((p) => p.length >= 2);
@@ -43,63 +44,56 @@ const isValidFullName = (name: string) => {
 
 const validateForm = (data: FormData): FormErrors => {
   const errors: FormErrors = {};
-  if (!data.company.trim()) errors.company = 'Este campo es obligatorio';
-  if (!data.fullName.trim()) {
+  if (!data.company.trim())   errors.company    = 'Este campo es obligatorio';
+  if (!data.fullName.trim())  {
     errors.fullName = 'Este campo es obligatorio';
   } else if (!isValidFullName(data.fullName)) {
     errors.fullName = 'Ingresa nombre y apellido completos';
   }
-  if (!data.visitsTo) errors.visitsTo = 'Este campo es obligatorio';
-  if (!data.reason) errors.reason = 'Este campo es obligatorio';
-  if (!data.idType) errors.idType = 'Este campo es obligatorio';
+  if (!data.visitHostId)      errors.visitHostId = 'Este campo es obligatorio';
+  if (!data.reason)           errors.reason      = 'Este campo es obligatorio';
+  if (!data.idType)           errors.idType      = 'Este campo es obligatorio';
   return errors;
 };
 
 const hasErrors = (e: FormErrors) => Object.keys(e).length > 0;
 
-
-
 const inputBase =
   'w-full min-h-[52px] px-4 py-3 text-base rounded-xl border-2 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors appearance-none';
 const inputNormal = `${inputBase} border-slate-200`;
-const inputError = `${inputBase} border-red-400 focus:border-red-400 focus:ring-red-400`;
-const labelBase = 'block text-sm font-semibold text-slate-700 mb-1.5';
-
+const inputError  = `${inputBase} border-red-400 focus:border-red-400 focus:ring-red-400`;
+const labelBase   = 'block text-sm font-semibold text-slate-700 mb-1.5';
 
 
 export default function NuevoVisitantePage() {
   const router = useRouter();
 
+  const [hosts, setHosts]               = useState<VisitHostOption[]>([]);
   const [mostrarGafete, setMostrarGafete] = useState(false);
   const [folioRegistro, setFolioRegistro] = useState('');
   const [fechaRegistro, setFechaRegistro] = useState('');
-  const [visitaALabel, setVisitaALabel] = useState('');
-
+  const [visitaALabel, setVisitaALabel]   = useState('');
+  const [submitting, setSubmitting]       = useState(false);
+  const [submitError, setSubmitError]     = useState<string | null>(null);
 
   const [form, setForm] = useState<FormData>({
-    company: '',
-    fullName: '',
-    visitsTo: '',
-    reason: '',
-    idType: '',
+    company:     '',
+    fullName:    '',
+    visitHostId: '',
+    reason:      '',
+    idType:      '',
   });
-  const [errors, setErrors] = useState<FormErrors>({});
+  const [errors, setErrors]   = useState<FormErrors>({});
   const [touched, setTouched] = useState<Partial<Record<keyof FormData, boolean>>>({});
 
-
-  const confirmRegistration = () => {
-    const folio = String(Date.now()).slice(-5);
-    const fechaHora = new Date().toISOString();
-    setFolioRegistro(folio);
-    setFechaRegistro(fechaHora);
-    setMostrarGafete(true);
-  };
+  useEffect(() => {
+    getVisitHosts().then(setHosts);
+  }, []);
 
   const handleImprimir = () => {
     window.print();
     setTimeout(() => router.push(ROUTES.home), 1000);
   };
-
 
   const handleChange = (field: keyof FormData, value: string) => {
     const newForm = { ...form, [field]: value };
@@ -114,25 +108,45 @@ export default function NuevoVisitantePage() {
     setErrors(validateForm(form));
   };
 
-
-  const handleRegistrar = () => {
-    const allTouched = { company: true, fullName: true, visitsTo: true, reason: true, idType: true };
+  const handleRegistrar = async () => {
+    const allTouched = { company: true, fullName: true, visitHostId: true, reason: true, idType: true };
     setTouched(allTouched);
     const newErrors = validateForm(form);
     setErrors(newErrors);
-    if (!hasErrors(newErrors)) {
-      confirmRegistration();
+    if (hasErrors(newErrors)) return;
+
+    setSubmitting(true);
+    setSubmitError(null);
+
+    const host = hosts.find((h) => h.id === form.visitHostId);
+    const result = await createVisitor({
+      fullName:           form.fullName,
+      company:            form.company,
+      visitHostId:        form.visitHostId,
+      visitTo:            host?.name ?? '',
+      reason:             form.reason,
+      identificationType: form.idType,
+    });
+
+    setSubmitting(false);
+
+    if (!result.success) {
+      setSubmitError(result.error ?? 'Error al registrar visitante');
+      return;
     }
+
+    setFolioRegistro(result.folio!);
+    setFechaRegistro(new Date().toISOString());
+    setVisitaALabel(host?.name ?? '');
+    setMostrarGafete(true);
   };
 
   const isFormValid = !hasErrors(validateForm(form));
-
 
   return (
     <div className="flex flex-col h-full bg-slate-100">
 
       <header className="flex items-center px-4 py-3 bg-white border-b border-slate-200 shadow-sm flex-shrink-0 relative">
-
         <button
           onClick={() => router.push(ROUTES.home)}
           className="
@@ -163,7 +177,6 @@ export default function NuevoVisitantePage() {
 
       <main className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-2xl mx-auto">
-
           <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex flex-col gap-5">
             <div className="flex items-center gap-2 mb-1">
               <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
@@ -172,6 +185,7 @@ export default function NuevoVisitantePage() {
               <h2 className="text-lg font-bold text-slate-800">Datos del visitante</h2>
             </div>
 
+            {/* Compañía */}
             <div>
               <label className={labelBase} htmlFor="company">
                 <span className="flex items-center gap-1.5">
@@ -189,11 +203,10 @@ export default function NuevoVisitantePage() {
                 className={touched.company && errors.company ? inputError : inputNormal}
                 autoComplete="organization"
               />
-              {touched.company && errors.company && (
-                <ErrorMsg message={errors.company} />
-              )}
+              {touched.company && errors.company && <ErrorMsg message={errors.company} />}
             </div>
 
+            {/* Nombre */}
             <div>
               <label className={labelBase} htmlFor="fullName">
                 <span className="flex items-center gap-1.5">
@@ -211,37 +224,41 @@ export default function NuevoVisitantePage() {
                 className={touched.fullName && errors.fullName ? inputError : inputNormal}
                 autoComplete="name"
               />
-              {touched.fullName && errors.fullName && (
-                <ErrorMsg message={errors.fullName} />
-              )}
+              {touched.fullName && errors.fullName && <ErrorMsg message={errors.fullName} />}
             </div>
 
+            {/* A quién visita — combobox desde DB */}
             <div>
-              <label className={labelBase} htmlFor="visitsTo">
+              <label className={labelBase} htmlFor="visitHostId">
                 <span className="flex items-center gap-1.5">
                   <Users size={14} className="text-slate-400" />
                   A quién visita <span className="text-red-500">*</span>
                 </span>
               </label>
-              <select
-                id="visitsTo"
-                value={form.visitsTo}
-                onChange={(e) => {
-                  const sel = e.target;
-                  handleChange('visitsTo', sel.value);
-                  setVisitaALabel(sel.options[sel.selectedIndex].text);
-                }}
-                onBlur={() => handleBlur('visitsTo')}
-                className={touched.visitsTo && errors.visitsTo ? inputError : inputNormal}
-              >
-                <option value="">Seleccionar...</option>
-                <option value="jose_hernandez">José de Jesús Hernández Vázquez</option>
-              </select>
-              {touched.visitsTo && errors.visitsTo && (
-                <ErrorMsg message={errors.visitsTo} />
-              )}
+              <div className="relative">
+                <select
+                  id="visitHostId"
+                  value={form.visitHostId}
+                  onChange={(e) => handleChange('visitHostId', e.target.value)}
+                  onBlur={() => handleBlur('visitHostId')}
+                  className={`${touched.visitHostId && errors.visitHostId ? inputError : inputNormal} pr-10`}
+                  disabled={hosts.length === 0}
+                >
+                  <option value="">
+                    {hosts.length === 0 ? 'Cargando anfitriones...' : 'Seleccionar...'}
+                  </option>
+                  {hosts.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}{h.position ? ` — ${h.position}` : ''}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+              {touched.visitHostId && errors.visitHostId && <ErrorMsg message={errors.visitHostId} />}
             </div>
 
+            {/* Motivo */}
             <div>
               <label className={labelBase} htmlFor="reason">
                 <span className="flex items-center gap-1.5">
@@ -249,27 +266,29 @@ export default function NuevoVisitantePage() {
                   Motivo de visita <span className="text-red-500">*</span>
                 </span>
               </label>
-              <select
-                id="reason"
-                value={form.reason}
-                onChange={(e) => handleChange('reason', e.target.value)}
-                onBlur={() => handleBlur('reason')}
-                className={touched.reason && errors.reason ? inputError : inputNormal}
-              >
-                <option value="">Seleccionar motivo...</option>
-                <option value="practicas">Prácticas</option>
-                <option value="prueba_sistema">Prueba de sistema</option>
-                <option value="revision_proyecto">Revisión de proyecto</option>
-                <option value="servicio">Servicio</option>
-                <option value="visita_cliente">Visita cliente</option>
-                <option value="visita_corporativo">Visita corporativo</option>
-                <option value="visita_proveedor">Visita de proveedor</option>
-              </select>
-              {touched.reason && errors.reason && (
-                <ErrorMsg message={errors.reason} />
-              )}
+              <div className="relative">
+                <select
+                  id="reason"
+                  value={form.reason}
+                  onChange={(e) => handleChange('reason', e.target.value)}
+                  onBlur={() => handleBlur('reason')}
+                  className={`${touched.reason && errors.reason ? inputError : inputNormal} pr-10`}
+                >
+                  <option value="">Seleccionar motivo...</option>
+                  <option value="practicas">Prácticas</option>
+                  <option value="prueba_sistema">Prueba de sistema</option>
+                  <option value="revision_proyecto">Revisión de proyecto</option>
+                  <option value="servicio">Servicio</option>
+                  <option value="visita_cliente">Visita cliente</option>
+                  <option value="visita_corporativo">Visita corporativo</option>
+                  <option value="visita_proveedor">Visita de proveedor</option>
+                </select>
+                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+              {touched.reason && errors.reason && <ErrorMsg message={errors.reason} />}
             </div>
 
+            {/* Identificación */}
             <div>
               <label className={labelBase} htmlFor="idType">
                 <span className="flex items-center gap-1.5">
@@ -277,27 +296,34 @@ export default function NuevoVisitantePage() {
                   Identificación <span className="text-red-500">*</span>
                 </span>
               </label>
-              <select
-                id="idType"
-                value={form.idType}
-                onChange={(e) => handleChange('idType', e.target.value)}
-                onBlur={() => handleBlur('idType')}
-                className={touched.idType && errors.idType ? inputError : inputNormal}
-              >
-                <option value="">Seleccionar...</option>
-                <option value="ine">INE</option>
-                <option value="pasaporte">Pasaporte</option>
-                <option value="licencia">Licencia de conducir</option>
-                <option value="gafete_empresa">Gafete de otra empresa</option>
-              </select>
-              {touched.idType && errors.idType && (
-                <ErrorMsg message={errors.idType} />
-              )}
+              <div className="relative">
+                <select
+                  id="idType"
+                  value={form.idType}
+                  onChange={(e) => handleChange('idType', e.target.value)}
+                  onBlur={() => handleBlur('idType')}
+                  className={`${touched.idType && errors.idType ? inputError : inputNormal} pr-10`}
+                >
+                  <option value="">Seleccionar...</option>
+                  <option value="ine">INE</option>
+                  <option value="pasaporte">Pasaporte</option>
+                  <option value="licencia">Licencia de conducir</option>
+                  <option value="gafete_empresa">Gafete de otra empresa</option>
+                </select>
+                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+              {touched.idType && errors.idType && <ErrorMsg message={errors.idType} />}
             </div>
+
+            {submitError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                <p className="text-sm text-red-700 font-medium">{submitError}</p>
+              </div>
+            )}
 
             <button
               onClick={handleRegistrar}
-              disabled={!isFormValid}
+              disabled={!isFormValid || submitting}
               className="
                 flex items-center justify-center gap-3
                 w-full h-14 mt-2
@@ -309,11 +335,16 @@ export default function NuevoVisitantePage() {
                 select-none touch-manipulation
               "
             >
-              <CheckCircle2 size={20} />
-              Registrar visitante
+              {submitting ? (
+                <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <>
+                  <CheckCircle2 size={20} />
+                  Registrar visitante
+                </>
+              )}
             </button>
           </div>
-
         </div>
       </main>
 

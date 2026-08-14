@@ -86,6 +86,7 @@ export default function PersonalMedicoPage() {
       <RegistroGeneralModal
         titulo="Personal médico"
         subtitulo="Registro de entrada y salida de personal médico"
+        personTypeSlug="medico"
         labelBoton="Registrar movimiento"
         onSuccess={() => router.push(ROUTES.home)}
         onClose={() => router.push(ROUTES.home)}

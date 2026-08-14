@@ -14,11 +14,11 @@ import {
   ClipboardList,
   AlertCircle,
   UserCheck,
+  LogOut,
 } from 'lucide-react';
 import StatusBar from '@/components/ui/StatusBar';
 import {
   UserPlus,
-  LogOut,
   KeyRound,
   BadgeX,
   GraduationCap,
@@ -30,30 +30,10 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import StaffButton from '@/components/ui/StaffButton';
 import { SYSTEM_NAME, ROUTES } from '@/lib/constants';
+import { findVisitorByFolio, registerVisitorExit } from '@/app/actions/visitors';
 
-
-const MOCK_VISITAS = [
-  {
-    folio: '00142',
-    nombre: 'Carlos Ramírez Vega',
-    empresa: 'Proveedor Industrial S.A.',
-    entrada: '10:34 AM',
-    visitaA: 'Ing. Martínez',
-    motivo: 'Entrega de material',
-  },
-  {
-    folio: '00143',
-    nombre: 'Laura Pérez Torres',
-    empresa: 'Consultora APEX',
-    entrada: '11:15 AM',
-    visitaA: 'Lic. González',
-    motivo: 'Reunión comercial',
-  },
-];
-
-type Visita = (typeof MOCK_VISITAS)[0];
+type VisitorFound = NonNullable<Awaited<ReturnType<typeof findVisitorByFolio>>>;
 type ModalState = 'buscar' | 'confirmar' | 'exito';
-
 
 function useClock() {
   const [clock, setClock] = useState({ time: '', date: '' });
@@ -72,7 +52,6 @@ function useClock() {
   return clock;
 }
 
-
 export default function SalidaPage() {
   const router = useRouter();
   const clock = useClock();
@@ -81,15 +60,14 @@ export default function SalidaPage() {
   const [modalState, setModalState] = useState<ModalState>('buscar');
   const [folio, setFolio] = useState('');
   const [folioError, setFolioError] = useState<string | null>(null);
-  const [visitaEncontrada, setVisitaEncontrada] = useState<Visita | null>(null);
+  const [visitaEncontrada, setVisitaEncontrada] = useState<VisitorFound | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [exitTime, setExitTime] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const [exitTime, setExitTime] = useState('');
-
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   useEffect(() => {
     if (modalState === 'exito') {
@@ -107,41 +85,60 @@ export default function SalidaPage() {
     }
   }, [modalState, router]);
 
-  const handleBuscar = () => {
+  const handleBuscar = async () => {
     if (!folio.trim()) return;
-    const visita = MOCK_VISITAS.find((v) => v.folio === folio.trim());
-    if (visita) {
-      setFolioError(null);
-      setVisitaEncontrada(visita);
-      setModalState('confirmar');
-    } else {
-      setFolioError('Folio no encontrado o visita ya cerrada');
+    setSearching(true);
+    setFolioError(null);
+
+    const result = await findVisitorByFolio(folio.trim());
+
+    setSearching(false);
+
+    if (!result) {
+      setFolioError('Folio no encontrado');
+      return;
     }
+    if (result.alreadyLeft) {
+      setFolioError('Este visitante ya registró su salida');
+      return;
+    }
+
+    setVisitaEncontrada(result);
+    setModalState('confirmar');
   };
 
-  const handleConfirmar = () => {
+  const handleConfirmar = async () => {
+    if (!visitaEncontrada) return;
+    setConfirming(true);
+
+    const result = await registerVisitorExit(visitaEncontrada.id);
+
+    setConfirming(false);
+
+    if (!result.success) {
+      setFolioError(result.error ?? 'Error al registrar salida');
+      setModalState('buscar');
+      return;
+    }
+
     const now = new Date().toLocaleTimeString('es-MX', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true,
+      hour: '2-digit', minute: '2-digit', hour12: true,
     });
     setExitTime(now);
-
-    console.log('=== SALIDA REGISTRADA ===', visitaEncontrada);
-
     setModalState('exito');
   };
+
   const handleCancelarConfirmar = () => {
     setVisitaEncontrada(null);
     setModalState('buscar');
   };
+
   const handleClose = () => router.push(ROUTES.home);
 
   return (
     <div className="flex flex-col h-full bg-slate-100 overflow-hidden">
 
       <div className="flex flex-col h-full pointer-events-none select-none" aria-hidden>
-
         <header className="flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200 shadow-sm flex-shrink-0">
           <div className="flex items-center gap-3">
             <Image src="/safe-demo_logo-blc-Photoroom.png" alt="Safe logo" width={40} height={40} className="rounded-lg" />
@@ -151,9 +148,7 @@ export default function SalidaPage() {
             </div>
           </div>
           <div className="text-right">
-            <p className="text-4xl font-bold text-slate-900 tabular-nums leading-none tracking-tighter">
-              {clock.time || '--:--'}
-            </p>
+            <p className="text-4xl font-bold text-slate-900 tabular-nums leading-none tracking-tighter">{clock.time || '--:--'}</p>
             <p className="text-sm text-slate-500 mt-1 font-medium capitalize">{dateCapitalized || '…'}</p>
           </div>
         </header>
@@ -180,15 +175,14 @@ export default function SalidaPage() {
             </div>
           </section>
         </main>
-
         <StatusBar />
       </div>
+
       <div className="absolute inset-0 flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm z-50">
         <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden">
 
           {modalState === 'buscar' && (
             <>
-
               <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
@@ -213,20 +207,15 @@ export default function SalidaPage() {
                     ref={inputRef}
                     type="text"
                     inputMode="numeric"
-                    placeholder="Ej. 00142"
+                    placeholder="Ej. 123456"
                     value={folio}
-                    onChange={(e) => {
-                      setFolio(e.target.value);
-                      setFolioError(null);
-                    }}
+                    onChange={(e) => { setFolio(e.target.value); setFolioError(null); }}
                     onKeyDown={(e) => e.key === 'Enter' && handleBuscar()}
                     className={`
                       w-full h-14 px-5 text-xl text-center font-semibold rounded-xl border-2
                       text-slate-900 placeholder:text-slate-300
                       focus:outline-none focus:ring-2 transition-colors
-                      ${folioError
-                        ? 'border-red-400 focus:border-red-400 focus:ring-red-400'
-                        : 'border-slate-200 focus:border-blue-500 focus:ring-blue-500'}
+                      ${folioError ? 'border-red-400 focus:border-red-400 focus:ring-red-400' : 'border-slate-200 focus:border-blue-500 focus:ring-blue-500'}
                     `}
                   />
                   {folioError && (
@@ -236,22 +225,22 @@ export default function SalidaPage() {
                     </p>
                   )}
                 </div>
-
                 <button
                   onClick={handleBuscar}
-                  disabled={!folio.trim()}
+                  disabled={!folio.trim() || searching}
                   className="
-                    flex items-center justify-center gap-2.5
-                    w-full h-14
-                    bg-blue-700 text-white text-base font-semibold
-                    rounded-xl shadow-md shadow-blue-900/20
-                    active:scale-[0.98] active:bg-blue-800
+                    flex items-center justify-center gap-2.5 w-full h-14
+                    bg-blue-700 text-white text-base font-semibold rounded-xl
+                    shadow-md shadow-blue-900/20 active:scale-[0.98] active:bg-blue-800
                     disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100
                     transition-all duration-150 select-none touch-manipulation
                   "
                 >
-                  <Search size={20} />
-                  Buscar folio
+                  {searching ? (
+                    <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <><Search size={20} /> Buscar folio</>
+                  )}
                 </button>
               </div>
             </>
@@ -274,11 +263,9 @@ export default function SalidaPage() {
               <div className="px-6 py-5">
                 <div className="bg-slate-50 rounded-2xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
                   <DataRow icon={<Hash size={15} className="text-slate-400" />} label="Folio" value={`#${visitaEncontrada.folio}`} highlight />
-                  <DataRow icon={<Users size={15} className="text-slate-400" />} label="Nombre" value={visitaEncontrada.nombre} />
-                  <DataRow icon={<Building2 size={15} className="text-slate-400" />} label="Empresa" value={visitaEncontrada.empresa} />
-                  <DataRow icon={<Clock size={15} className="text-slate-400" />} label="Entrada" value={visitaEncontrada.entrada} />
-                  <DataRow icon={<UserCheck size={15} className="text-slate-400" />} label="Visita a" value={visitaEncontrada.visitaA} />
-                  <DataRow icon={<ClipboardList size={15} className="text-slate-400" />} label="Motivo" value={visitaEncontrada.motivo} />
+                  <DataRow icon={<Users size={15} className="text-slate-400" />} label="Nombre" value={visitaEncontrada.fullName} />
+                  <DataRow icon={<Building2 size={15} className="text-slate-400" />} label="Empresa" value={visitaEncontrada.company} />
+                  <DataRow icon={<UserCheck size={15} className="text-slate-400" />} label="Visita a" value={visitaEncontrada.visitTo} />
                 </div>
               </div>
 
@@ -286,11 +273,9 @@ export default function SalidaPage() {
                 <button
                   onClick={handleCancelarConfirmar}
                   className="
-                    flex-1 flex items-center justify-center gap-2
-                    h-14
+                    flex-1 flex items-center justify-center gap-2 h-14
                     bg-white border-2 border-slate-200 text-slate-700 text-base font-semibold
-                    rounded-xl
-                    active:scale-[0.97] active:bg-slate-50
+                    rounded-xl active:scale-[0.97] active:bg-slate-50
                     transition-all duration-150 select-none touch-manipulation
                   "
                 >
@@ -298,17 +283,21 @@ export default function SalidaPage() {
                 </button>
                 <button
                   onClick={handleConfirmar}
+                  disabled={confirming}
                   className="
-                    flex-[2] flex items-center justify-center gap-2.5
-                    h-14
+                    flex-[2] flex items-center justify-center gap-2.5 h-14
                     bg-blue-700 text-white text-base font-semibold
                     rounded-xl shadow-md shadow-blue-900/20
                     active:scale-[0.98] active:bg-blue-800
+                    disabled:opacity-50
                     transition-all duration-150 select-none touch-manipulation
                   "
                 >
-                  <LogOut size={19} />
-                  Confirmar salida
+                  {confirming ? (
+                    <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <><LogOut size={19} /> Confirmar salida</>
+                  )}
                 </button>
               </div>
             </>
@@ -327,7 +316,6 @@ export default function SalidaPage() {
                   <CheckCircle2 size={52} className="text-emerald-600" strokeWidth={1.5} />
                 </div>
               </div>
-
               <div
                 style={{
                   opacity: showSuccess ? 1 : 0,
@@ -337,20 +325,14 @@ export default function SalidaPage() {
               >
                 <h2 className="text-2xl font-bold text-slate-900">Salida registrada</h2>
                 <p className="text-base text-slate-600 mt-1.5 font-medium">
-                  {visitaEncontrada.nombre} · {exitTime}
+                  {visitaEncontrada.fullName} · {exitTime}
                 </p>
-                <p className="text-sm text-slate-400 mt-2">
-                  El visitante puede retirar su gafete
-                </p>
+                <p className="text-sm text-slate-400 mt-2">El visitante puede retirar su gafete</p>
               </div>
-
               <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mt-2">
                 <div
                   className="h-full bg-emerald-400 rounded-full"
-                  style={{
-                    width: showSuccess ? '0%' : '100%',
-                    transition: 'width 2.4s linear 100ms',
-                  }}
+                  style={{ width: showSuccess ? '0%' : '100%', transition: 'width 2.4s linear 100ms' }}
                 />
               </div>
               <p className="text-xs text-slate-400">Cerrando automáticamente…</p>
@@ -363,22 +345,13 @@ export default function SalidaPage() {
   );
 }
 
-function DataRow({
-  icon,
-  label,
-  value,
-  highlight,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  highlight?: boolean;
+function DataRow({ icon, label, value, highlight }: {
+  icon: React.ReactNode; label: string; value: string; highlight?: boolean;
 }) {
   return (
     <div className="flex items-center justify-between px-4 py-3 gap-3">
       <span className="flex items-center gap-2 text-xs text-slate-500 font-medium min-w-[90px]">
-        {icon}
-        {label}
+        {icon}{label}
       </span>
       <span className={`text-sm font-semibold text-right ${highlight ? 'text-blue-700 font-mono' : 'text-slate-800'}`}>
         {value}
