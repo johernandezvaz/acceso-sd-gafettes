@@ -151,7 +151,11 @@ export default function AdminPersonalPage() {
                     {p.paymentFrequency ? (
                       <span className="inline-flex items-center gap-1 font-medium text-slate-700">
                         <CreditCard size={12} className="text-slate-400" />
-                        {p.paymentFrequency === 'SEMANAL' ? 'Semanal' : 'Quincenal'}
+                        {p.paymentFrequency === 'MENSUAL'
+                          ? 'Mensual'
+                          : p.paymentFrequency === 'SEMANAL'
+                          ? 'Semanal'
+                          : 'Quincenal'}
                       </span>
                     ) : (
                       <span className="text-slate-400">—</span>
@@ -214,11 +218,24 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
   const [personTypeId, setTypeId] = useState(person?.personTypeId ?? '')
   const [scheduleEntry, setScheduleEntry] = useState(person?.scheduleEntry ?? '')
   const [scheduleExit, setScheduleExit] = useState(person?.scheduleExit ?? '')
-  const [paymentFrequency, setPaymentFrequency] = useState<'SEMANAL' | 'QUINCENAL'>(
-    (person?.paymentFrequency as 'SEMANAL' | 'QUINCENAL') ?? 'QUINCENAL'
+  const [paymentFrequency, setPaymentFrequency] = useState<'SEMANAL' | 'QUINCENAL' | 'MENSUAL'>(
+    (person?.paymentFrequency as 'SEMANAL' | 'QUINCENAL' | 'MENSUAL') ?? 'QUINCENAL'
   )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  const handleTypeChange = (selectedTypeId: string) => {
+    setTypeId(selectedTypeId)
+    setError(null)
+    if (!person) {
+      const selectedType = types.find((t) => t.id === selectedTypeId)
+      if (selectedType?.slug === 'limpieza') {
+        setPaymentFrequency('MENSUAL')
+      } else if (selectedType?.slug === 'practicantes' || selectedType?.slug === 'medico') {
+        setPaymentFrequency('QUINCENAL')
+      }
+    }
+  }
 
   const handleSubmit = async () => {
     if (!fullName.trim()) { setError('El nombre es obligatorio'); return }
@@ -278,7 +295,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
             <div className="relative">
               <select
                 value={personTypeId}
-                onChange={(e) => { setTypeId(e.target.value); setError(null) }}
+                onChange={(e) => handleTypeChange(e.target.value)}
                 className="w-full h-11 pl-4 pr-10 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors text-sm appearance-none"
               >
                 <option value="">Seleccionar tipo...</option>
@@ -324,31 +341,31 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
               <CreditCard size={13} className="text-emerald-600" />
               Periodicidad de pago
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <label
                 className={`
-                  flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all
-                  ${paymentFrequency === 'SEMANAL'
-                    ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold'
+                  flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all text-xs
+                  ${paymentFrequency === 'MENSUAL'
+                    ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold shadow-xs'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/60 font-medium'}
                 `}
               >
                 <input
                   type="radio"
                   name="paymentFrequency"
-                  value="SEMANAL"
-                  checked={paymentFrequency === 'SEMANAL'}
-                  onChange={() => setPaymentFrequency('SEMANAL')}
+                  value="MENSUAL"
+                  checked={paymentFrequency === 'MENSUAL'}
+                  onChange={() => setPaymentFrequency('MENSUAL')}
                   className="text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm">Semanal</span>
+                <span>Mensual</span>
               </label>
 
               <label
                 className={`
-                  flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all
+                  flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all text-xs
                   ${paymentFrequency === 'QUINCENAL'
-                    ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold'
+                    ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold shadow-xs'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/60 font-medium'}
                 `}
               >
@@ -360,7 +377,26 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
                   onChange={() => setPaymentFrequency('QUINCENAL')}
                   className="text-blue-600 focus:ring-blue-500"
                 />
-                <span className="text-sm">Quincenal</span>
+                <span>Quincenal</span>
+              </label>
+
+              <label
+                className={`
+                  flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all text-xs
+                  ${paymentFrequency === 'SEMANAL'
+                    ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold shadow-xs'
+                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/60 font-medium'}
+                `}
+              >
+                <input
+                  type="radio"
+                  name="paymentFrequency"
+                  value="SEMANAL"
+                  checked={paymentFrequency === 'SEMANAL'}
+                  onChange={() => setPaymentFrequency('SEMANAL')}
+                  className="text-blue-600 focus:ring-blue-500"
+                />
+                <span>Semanal</span>
               </label>
             </div>
           </div>

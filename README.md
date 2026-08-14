@@ -1132,7 +1132,11 @@ El seed (`npm run db:seed`) inicializa las 6 llaves por defecto:
 
 ### 1. Horarios y Periodicidad de Pago del Personal
 - **Horarios por Persona:** Cada registro en `Person` puede tener configurado su horario habitual de entrada (`scheduleEntry`, ej. `"08:00"`) y salida (`scheduleExit`, ej. `"17:00"`).
-- **Periodicidad de Pago:** Campo `paymentFrequency` (`SEMANAL` o `QUINCENAL`, por defecto `QUINCENAL`) configurable al crear o editar cualquier persona.
+- **Periodicidad de Pago:** Campo `paymentFrequency` (`SEMANAL`, `QUINCENAL`, `MENSUAL`):
+  - **Transportistas:** Pago **Mensual** por defecto.
+  - **Limpieza:** Pago **Mensual** por defecto.
+  - **Practicantes y Doctora / Personal Médico:** Pago **Quincenal** por defecto.
+  - Modificable en cualquier momento desde el modal de creación y edición.
 - **Persistencia:** Almacenado directamente en PostgreSQL en la tabla `persons`.
 
 ### 2. Catálogo y Módulo de Transportistas

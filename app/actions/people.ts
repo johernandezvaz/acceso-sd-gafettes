@@ -59,7 +59,7 @@ export async function createPerson(data: {
   personTypeId: string
   scheduleEntry?: string | null
   scheduleExit?: string | null
-  paymentFrequency?: 'SEMANAL' | 'QUINCENAL' | null
+  paymentFrequency?: 'SEMANAL' | 'QUINCENAL' | 'MENSUAL' | null
 }): Promise<{ success: boolean; error?: string; personId?: string }> {
   const session = await requireAuth()
 
@@ -107,7 +107,7 @@ export async function updatePerson(
     personTypeId?: string
     scheduleEntry?: string | null
     scheduleExit?: string | null
-    paymentFrequency?: 'SEMANAL' | 'QUINCENAL' | null
+    paymentFrequency?: 'SEMANAL' | 'QUINCENAL' | 'MENSUAL' | null
     active?: boolean
   }
 ): Promise<{ success: boolean; error?: string }> {

@@ -215,6 +215,7 @@ model KeyAssignment {
 enum PaymentFrequency {
   SEMANAL
   QUINCENAL
+  MENSUAL
 }
 
 enum KeyRequesterType {
