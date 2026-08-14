@@ -23,9 +23,8 @@ export default function AdminHeader({ name, email, role }: AdminHeaderProps) {
       <div />
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2.5 text-sm">
-          <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${
-            isSuperAdmin ? 'bg-amber-100' : 'bg-slate-100'
-          }`}>
+          <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${isSuperAdmin ? 'bg-amber-100' : 'bg-slate-100'
+            }`}>
             {isSuperAdmin
               ? <Crown size={14} className="text-amber-600" />
               : <User size={14} className="text-slate-500" />

@@ -80,6 +80,7 @@ model Person {
 
   personType   PersonType     @relation(fields: [personTypeId], references: [id])
   accessRecords AccessRecord[]
+  keyAssignments KeyAssignment[]
 
   @@index([personTypeId])
   @@index([active])
@@ -146,19 +147,64 @@ model VisitorAccessRecord {
 // ─────────────────────────────────────────────────────────────
 // VISIT HOSTS — personas que pueden recibir visitantes
 // ("A quién visita" en el formulario de visitantes)
+// Importados desde admins_entrada.csv mediante npm run db:import-visit-hosts
 // ─────────────────────────────────────────────────────────────
 model VisitHost {
-  id        String    @id @default(cuid())
-  name      String    @unique
-  position  String?
-  active    Boolean   @default(true)
-  createdAt DateTime  @default(now()) @map("created_at")
-  updatedAt DateTime  @updatedAt @map("updated_at")
+  id             String    @id @default(cuid())
+  employeeNumber String    @unique @map("employee_number")  // num_empleado — clave de upsert
+  fullName       String    @map("full_name")                // nombre_empleado
+  department     String                                      // departamento
+  position       String                                      // puesto
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  visitors  Visitor[]
+  visitors       Visitor[]
 
   @@index([active])
+  @@index([fullName])
+  @@index([department])
   @@map("visit_hosts")
+}
+
+// ─────────────────────────────────────────────────────────────
+// KEYS — catálogo de llaves
+// ─────────────────────────────────────────────────────────────
+model Key {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  status      KeyStatus       @default(AVAILABLE)
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  assignments KeyAssignment[]
+
+  @@index([status])
+  @@index([active])
+  @@map("keys")
+}
+
+// ─────────────────────────────────────────────────────────────
+// KEY ASSIGNMENTS — historial de préstamos de llaves
+// ─────────────────────────────────────────────────────────────
+model KeyAssignment {
+  id         String    @id @default(cuid())
+  keyId      String    @map("key_id")
+  personId   String    @map("person_id")
+  takenAt    DateTime  @default(now()) @map("taken_at")
+  returnedAt DateTime? @map("returned_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  key        Key       @relation(fields: [keyId], references: [id])
+  person     Person    @relation(fields: [personId], references: [id])
+
+  @@index([keyId])
+  @@index([personId])
+  @@index([takenAt])
+  @@index([returnedAt])
+  @@index([keyId, returnedAt])
+  @@map("key_assignments")
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -172,4 +218,10 @@ enum Movement {
 enum AdminRole {
   ADMIN
   SUPERADMIN
+}
+
+enum KeyStatus {
+  AVAILABLE
+  OCCUPIED
+  INACTIVE
 }

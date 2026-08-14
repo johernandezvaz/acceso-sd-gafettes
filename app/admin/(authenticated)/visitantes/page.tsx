@@ -248,6 +248,10 @@ function VisitorDetailModal({ visitor, onClose }: { visitor: Visitor; onClose: (
             ['Nombre completo', visitor.fullName],
             ['Empresa', visitor.company],
             ['Visita a', visitor.visitTo],
+            ...(visitor.visitHost ? [
+              ['Departamento', visitor.visitHost.department],
+              ['Puesto', visitor.visitHost.position],
+            ] as [string, string][] : []),
             ['Motivo', REASON_LABELS[visitor.reason] ?? visitor.reason],
             ['Identificación', ID_LABELS[visitor.identificationType] ?? visitor.identificationType],
             ['Entrada', entry ? new Date(entry.timestamp).toLocaleString('es-MX') : '—'],

@@ -5,16 +5,51 @@ import { Movement } from '@prisma/client'
 
 export interface VisitHostOption {
   id: string
-  name: string
-  position?: string | null
+  employeeNumber: string
+  fullName: string
+  department: string
+  position: string
 }
 
 export async function getVisitHosts(): Promise<VisitHostOption[]> {
   const hosts = await prisma.visitHost.findMany({
     where: { active: true },
-    orderBy: { name: 'asc' },
+    orderBy: { fullName: 'asc' },
   })
-  return hosts.map((h) => ({ id: h.id, name: h.name, position: h.position }))
+  return hosts.map((h) => ({
+    id: h.id,
+    employeeNumber: h.employeeNumber,
+    fullName: h.fullName,
+    department: h.department,
+    position: h.position,
+  }))
+}
+
+export async function searchVisitHosts(query: string): Promise<VisitHostOption[]> {
+  const q = query.trim()
+  if (!q) return []
+
+  const hosts = await prisma.visitHost.findMany({
+    where: {
+      active: true,
+      OR: [
+        { fullName: { contains: q, mode: 'insensitive' } },
+        { department: { contains: q, mode: 'insensitive' } },
+        { position: { contains: q, mode: 'insensitive' } },
+        { employeeNumber: { contains: q, mode: 'insensitive' } },
+      ],
+    },
+    orderBy: { fullName: 'asc' },
+    take: 20,
+  })
+
+  return hosts.map((h) => ({
+    id: h.id,
+    employeeNumber: h.employeeNumber,
+    fullName: h.fullName,
+    department: h.department,
+    position: h.position,
+  }))
 }
 
 function generateFolio(): string {
@@ -113,7 +148,7 @@ export async function listVisitors(filters?: {
       ? {
         createdAt: {
           ...(filters.dateFrom ? { gte: new Date(filters.dateFrom) } : {}),
-          ...(filters.dateTo   ? { lte: new Date(filters.dateTo)   } : {}),
+          ...(filters.dateTo ? { lte: new Date(filters.dateTo) } : {}),
         },
       }
       : {}
@@ -121,12 +156,12 @@ export async function listVisitors(filters?: {
   const searchTerm = filters?.search?.trim()
   const searchFilter = searchTerm
     ? {
-        OR: [
-          { fullName: { contains: searchTerm, mode: 'insensitive' as const } },
-          { company:  { contains: searchTerm, mode: 'insensitive' as const } },
-          { folio:    { contains: searchTerm, mode: 'insensitive' as const } },
-        ],
-      }
+      OR: [
+        { fullName: { contains: searchTerm, mode: 'insensitive' as const } },
+        { company: { contains: searchTerm, mode: 'insensitive' as const } },
+        { folio: { contains: searchTerm, mode: 'insensitive' as const } },
+      ],
+    }
     : {}
 
   return prisma.visitor.findMany({

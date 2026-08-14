@@ -9,9 +9,12 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
+lector.ipynb
+admins_entrada.csv
+LISTADO ADMIS 14 08 26.xls
 # testing
 /coverage
+prompt.md
 
 # next.js
 /.next/

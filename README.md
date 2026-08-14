@@ -896,12 +896,205 @@ Reglas de linting
 | `components/ui/StatusBar.tsx` | Presente en TODAS las páginas. |
 | `components/GafeteVisitante.tsx` | ID `gafete-print` acoplado con `globals.css`. No cambiar el ID sin actualizar el CSS. |
 
+---
+
+## 21. Catálogo VisitHost — "A quién visita"
+
+### Modelo de datos
+
+El modelo `VisitHost` en `prisma/schema.prisma` representa a las personas que pueden recibir visitas:
+
+```prisma
+model VisitHost {
+  id             String    @id @default(cuid())
+  employeeNumber String    @unique @map("employee_number")  // num_empleado — clave de upsert
+  fullName       String    @map("full_name")                // nombre_empleado
+  department     String                                      // departamento
+  position       String                                      // puesto
+  active         Boolean   @default(true)
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  visitors       Visitor[]
+}
+```
+
+`employeeNumber` es la clave única de upsert. El catálogo se importa desde `admins_entrada.csv`.
+
+### Relación Visitor → VisitHost
+
+```
+Visitor.visitHostId  (FK opcional)
+         │
+         ▼
+      VisitHost.id
+```
+
+Además, `Visitor.visitTo` almacena el nombre completo del anfitrión al momento del registro (snapshot). Esto garantiza que los datos históricos muestren correctamente el nombre aunque el `VisitHost` sea editado o desactivado.
+
+### Importación desde CSV
+
+El catálogo de anfitriones se carga desde `admins_entrada.csv` (en la raíz del proyecto, excluido de git):
+
+```
+num_empleado → employeeNumber
+nombre_empleado → fullName
+departamento → department
+puesto → position
+```
+
+**Comando de importación:**
+
+```bash
+npm run db:import-visit-hosts
+```
+
+El script `prisma/import-visit-hosts.ts`:
+- Valida encabezados del CSV
+- Ignora filas vacías
+- Detecta duplicados de `num_empleado` en el CSV
+- Hace `upsert` usando `employeeNumber` como clave
+- Mantiene `active = true`
+- Reporta: creados / actualizados / errores
+- **No elimina registros existentes**
+
+**Para actualizar el catálogo** con un CSV nuevo:
+1. Reemplaza `admins_entrada.csv` en la raíz
+2. Ejecuta `npm run db:import-visit-hosts`
+3. Los registros existentes se actualizan; los nuevos se crean; los no presentes en el CSV permanecen sin cambios
+
+### Popup de búsqueda server-side
+
+El campo "A quién visita" en el formulario de nuevo visitante usa el componente `components/ui/VisitHostPicker.tsx`.
+
+**Flujo:**
+1. Recepción hace clic en "Seleccionar persona"
+2. Se abre un modal con un campo de búsqueda
+3. Al escribir (debounce 300ms) se llama a la Server Action `searchVisitHosts(query)` en `app/actions/visitors.ts`
+4. PostgreSQL busca coincidencias en `full_name`, `department`, `position`, `employee_number` (case-insensitive)
+5. Se muestran hasta 20 resultados con nombre, puesto, departamento y número de empleado
+6. Al seleccionar, el modal se cierra y el formulario guarda el `visitHostId`
+
+**No se cargan los 80+ registros al cliente.** La búsqueda es siempre server-side.
+
+### Administración de Personas a Visitar (`/admin/personas-a-visitar`)
+
+Disponible en el menú lateral del Dashboard Administrativo bajo la pestaña **"Personas a visitar"**:
+
+- **Lectura directa desde PostgreSQL:** Consulta la tabla `visit_hosts` mediante Server Actions (`app/actions/visitHosts.ts`).
+- **Pestañas de estado:** Filtro rápido por `Activos` (por defecto), `Inactivos` o `Todos`.
+- **Buscador server-side:** Búsqueda en tiempo real por nombre, número de empleado, departamento o puesto.
+- **Edición y creación:** Modales para dar de alta nuevas personas a visitar o modificar número de empleado, nombre completo, departamento y puesto.
+- **Desactivación / Reactivación (Soft Delete):**
+  - Al desactivar un anfitrión (`active = false`), deja de aparecer inmediatamente en el popup de visitas del kiosco.
+  - El anfitrión permanece en la base de datos y se muestra en la pestaña de `Inactivos` del panel.
+  - Los visitantes históricos que apuntan a ese `visit_host_id` mantienen su relación e historial intactos.
+  - Puede reactivarse en cualquier momento con un solo clic.
+- **Auditoría:** Cada creación, edición o cambio de estado registra un evento en la tabla `audit_logs`.
+
+---
+
+## 22. Control de Llaves (`Key` y `KeyAssignment`)
+
+### Modelo de datos
+
+El control de llaves cuenta con dos entidades persistidas en PostgreSQL:
+
+```prisma
+enum KeyStatus {
+  AVAILABLE
+  OCCUPIED
+  INACTIVE
+}
+
+model Key {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  status      KeyStatus       @default(AVAILABLE)
+  active      Boolean         @default(true)
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  assignments KeyAssignment[]
+
+  @@map("keys")
+}
+
+model KeyAssignment {
+  id         String    @id @default(cuid())
+  keyId      String    @map("key_id")
+  personId   String    @map("person_id")
+  takenAt    DateTime  @default(now()) @map("taken_at")
+  returnedAt DateTime? @map("returned_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  key        Key       @relation(fields: [keyId], references: [id])
+  person     Person    @relation(fields: [personId], references: [id])
+
+  @@map("key_assignments")
+}
+```
+
+### Relación con el personal (`Person`)
+
+```
+Person (id) ────1:N────► KeyAssignment (person_id) ◄────N:1──── Key (id)
+```
+
+Quien toma una llave debe ser una persona registrada y activa en el catálogo general de `Person` (Seguridad, Limpieza, Médico, Practicantes).
+
+### Flujo en el Kiosco (`/llaves`)
+
+1. **Tomar llave disponible:**
+   - Clic en "Tomar" abre el modal "¿Quién toma la llave?".
+   - Selector interactivo/combobox de personas activas desde `Person`.
+   - Al confirmar: se crea un `KeyAssignment` con `taken_at = now()` y `returned_at = null`, y la llave cambia a `OCCUPIED`.
+2. **Devolver llave ocupada:**
+   - La tarjeta muestra quién tiene la llave y el tiempo transcurrido (`hace Xm`).
+   - Clic en "Devolver" muestra modal de confirmación.
+   - Al confirmar: se actualiza `returnedAt = now()` en el `KeyAssignment` activo y la llave vuelve a `AVAILABLE`.
+3. **Persistencia e historial:**
+   - Al devolver una llave **nunca se borra el registro**, preservando todo el historial de préstamos.
+
+### Administración de Llaves en el Panel
+
+El menú lateral del Dashboard Administrativo cuenta con dos secciones dedicadas:
+
+#### 1. Catálogo de Llaves (`/admin/llaves`)
+- **Métricas:** Conteo en tiempo real de llaves `Disponibles`, `En uso`, `Inactivas` y `Total`.
+- **Gestión de Llaves:**
+  - Ver disponibilidad y quién tiene cada llave en tiempo real.
+  - Agregar nuevas llaves al catálogo.
+  - Editar nombre de llave existente.
+  - Desactivar/activar llaves (`active = false` / `true`).
+  - Acceso directo a la pantalla de historial de registros.
+
+#### 2. Registro de Llaves (`/admin/llaves/registro`)
+- **Sección independiente en el sidebar:** Historial de préstamos accesible tanto para `ADMIN` como para `SUPERADMIN`.
+- **Buscador principal server-side:** Búsqueda rápida por nombre de persona, número de empleado o nombre de la llave.
+- **Barra de filtros combinables:**
+  - Filtro por llave específica o todas las llaves.
+  - Filtro por estado: `Todos`, `En uso` (con indicador pulsante), `Devuelta`.
+  - Filtro por fecha: `Histórico`, `Hoy`, `Ayer`, `Esta semana`, `Este mes`, `Personalizado` (desde/hasta).
+- **Paginación Server-Side:** Navegación por páginas (`page`, `pageSize`, conteo total) para garantizar escalabilidad a miles de registros.
+- **Duración en tiempo real:** Cálculo dinámico de la duración de préstamo (`returned_at - taken_at` para devueltas, `ahora - taken_at` para llaves actualmente en uso).
+- **Auditoría:** Cada operación administrativa (`CREATE_KEY`, `UPDATE_KEY`, `ACTIVATE_KEY`, `DEACTIVATE_KEY`) y operativa (`TAKE_KEY`, `RETURN_KEY`) genera un log en `audit_logs`.
+
+### Llaves Iniciales (Seed)
+
+El seed (`npm run db:seed`) inicializa las 6 llaves por defecto:
+1. `Sala Agave`
+2. `Sala Mezquite`
+3. `Sala Sotol`
+4. `Sala Aant`
+5. `Sala Asakao`
+6. `Enfermería`
+
 ### Known issues / technical debt
 
 1. **`useClock` duplicado:** Copiado en 5+ archivos. Candidato a `lib/hooks/useClock.ts`.
 2. **`inputBase/Normal/Error` duplicados:** En `visitante/nuevo/page.tsx` y `RegistroGeneralModal.tsx`. Candidatos a `lib/styles.ts` o `<FormInput>`.
 3. **Bug línea 220 de `RegistroGeneralModal.tsx`:** `(showToast || true)` siempre es `true`. Toast se renderiza siempre que `tipo !== null`.
-4. **Datos hardcodeados:** "A quién visita" tiene 1 solo nombre. Llaves y visitas mock son estáticas.
-5. **Sin persistencia:** Registros se pierden al recargar.
-6. **`console.log` en producción:** Los puntos de datos deben conectarse a un backend.
-7. **Páginas de personal duplicadas:** Las 5 páginas son prácticamente idénticas. Candidatas a rutas dinámicas.
+4. **Páginas de personal duplicadas:** Las 5 páginas son prácticamente idénticas. Candidatas a rutas dinámicas.
+
+

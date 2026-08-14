@@ -22,10 +22,10 @@ function formatDate(d: Date) {
 }
 
 export default function AdminUsuariosPage() {
-  const [users, setUsers]         = useState<AdminUserRow[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [users, setUsers] = useState<AdminUserRow[]>([])
+  const [loading, setLoading] = useState(true)
   const [showCreate, setShowCreate] = useState(false)
-  const [tempPwd, setTempPwd]     = useState<{ email: string; name: string; pwd: string } | null>(null)
+  const [tempPwd, setTempPwd] = useState<{ email: string; name: string; pwd: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -52,11 +52,10 @@ export default function AdminUsuariosPage() {
   return (
     <div className="max-w-4xl mx-auto">
 
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2">
-            <Crown size={22} className="text-amber-500" />
+
             Usuarios administradores
           </h1>
           <p className="text-sm text-slate-500 mt-1">{users.length} usuario{users.length !== 1 ? 's' : ''}</p>
@@ -103,9 +102,8 @@ export default function AdminUsuariosPage() {
                   </td>
                   <td className="px-5 py-3.5">
                     <div className="flex flex-col gap-1">
-                      <span className={`inline-flex items-center gap-1.5 w-fit px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                        u.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
-                      }`}>
+                      <span className={`inline-flex items-center gap-1.5 w-fit px-2.5 py-0.5 rounded-full text-xs font-semibold ${u.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
+                        }`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${u.active ? 'bg-emerald-500' : 'bg-slate-400'}`} />
                         {u.active ? 'Activo' : 'Inactivo'}
                       </span>
@@ -129,11 +127,10 @@ export default function AdminUsuariosPage() {
                         </button>
                         <button
                           onClick={() => handleToggle(u)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            u.active
-                              ? 'text-slate-400 hover:text-red-600 hover:bg-red-50'
-                              : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                          }`}
+                          className={`p-1.5 rounded-lg transition-colors ${u.active
+                            ? 'text-slate-400 hover:text-red-600 hover:bg-red-50'
+                            : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                            }`}
                           title={u.active ? 'Desactivar' : 'Reactivar'}
                         >
                           {u.active ? <ShieldOff size={14} /> : <ShieldCheck size={14} />}
@@ -182,7 +179,7 @@ function CreateAdminModal({
   onClose: () => void
   onCreated: (email: string, name: string, pwd: string) => void
 }) {
-  const [name, setName]   = useState('')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -264,7 +261,7 @@ function TempPasswordModal({
   onClose: () => void
 }) {
   const [visible, setVisible] = useState(false)
-  const [copied, setCopied]   = useState(false)
+  const [copied, setCopied] = useState(false)
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(password)
@@ -309,11 +306,10 @@ function TempPasswordModal({
               </button>
               <button
                 onClick={handleCopy}
-                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                  copied
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${copied
+                  ? 'bg-emerald-600 text-white'
+                  : 'bg-slate-700 text-slate-200 hover:bg-slate-600'
+                  }`}
               >
                 {copied ? <><Check size={13} /> Copiada</> : <><Copy size={13} /> Copiar</>}
               </button>

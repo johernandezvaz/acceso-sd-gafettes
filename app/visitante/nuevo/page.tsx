@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -18,7 +18,8 @@ import {
 import StatusBar from '@/components/ui/StatusBar';
 import GafeteVisitante from '@/components/GafeteVisitante';
 import { SYSTEM_NAME, ROUTES } from '@/lib/constants';
-import { getVisitHosts, createVisitor, type VisitHostOption } from '@/app/actions/visitors';
+import { createVisitor, type VisitHostOption } from '@/app/actions/visitors';
+import VisitHostPicker from '@/components/ui/VisitHostPicker';
 
 
 interface FormData {
@@ -44,15 +45,15 @@ const isValidFullName = (name: string) => {
 
 const validateForm = (data: FormData): FormErrors => {
   const errors: FormErrors = {};
-  if (!data.company.trim())   errors.company    = 'Este campo es obligatorio';
-  if (!data.fullName.trim())  {
+  if (!data.company.trim()) errors.company = 'Este campo es obligatorio';
+  if (!data.fullName.trim()) {
     errors.fullName = 'Este campo es obligatorio';
   } else if (!isValidFullName(data.fullName)) {
     errors.fullName = 'Ingresa nombre y apellido completos';
   }
-  if (!data.visitHostId)      errors.visitHostId = 'Este campo es obligatorio';
-  if (!data.reason)           errors.reason      = 'Este campo es obligatorio';
-  if (!data.idType)           errors.idType      = 'Este campo es obligatorio';
+  if (!data.visitHostId) errors.visitHostId = 'Este campo es obligatorio';
+  if (!data.reason) errors.reason = 'Este campo es obligatorio';
+  if (!data.idType) errors.idType = 'Este campo es obligatorio';
   return errors;
 };
 
@@ -61,34 +62,30 @@ const hasErrors = (e: FormErrors) => Object.keys(e).length > 0;
 const inputBase =
   'w-full min-h-[52px] px-4 py-3 text-base rounded-xl border-2 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors appearance-none';
 const inputNormal = `${inputBase} border-slate-200`;
-const inputError  = `${inputBase} border-red-400 focus:border-red-400 focus:ring-red-400`;
-const labelBase   = 'block text-sm font-semibold text-slate-700 mb-1.5';
+const inputError = `${inputBase} border-red-400 focus:border-red-400 focus:ring-red-400`;
+const labelBase = 'block text-sm font-semibold text-slate-700 mb-1.5';
 
 
 export default function NuevoVisitantePage() {
   const router = useRouter();
 
-  const [hosts, setHosts]               = useState<VisitHostOption[]>([]);
+  const [selectedHost, setSelectedHost] = useState<VisitHostOption | null>(null);
   const [mostrarGafete, setMostrarGafete] = useState(false);
   const [folioRegistro, setFolioRegistro] = useState('');
   const [fechaRegistro, setFechaRegistro] = useState('');
-  const [visitaALabel, setVisitaALabel]   = useState('');
-  const [submitting, setSubmitting]       = useState(false);
-  const [submitError, setSubmitError]     = useState<string | null>(null);
+  const [visitaALabel, setVisitaALabel] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const [form, setForm] = useState<FormData>({
-    company:     '',
-    fullName:    '',
+    company: '',
+    fullName: '',
     visitHostId: '',
-    reason:      '',
-    idType:      '',
+    reason: '',
+    idType: '',
   });
-  const [errors, setErrors]   = useState<FormErrors>({});
+  const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Partial<Record<keyof FormData, boolean>>>({});
-
-  useEffect(() => {
-    getVisitHosts().then(setHosts);
-  }, []);
 
   const handleImprimir = () => {
     window.print();
@@ -108,6 +105,11 @@ export default function NuevoVisitantePage() {
     setErrors(validateForm(form));
   };
 
+  const handleHostSelect = (host: VisitHostOption) => {
+    setSelectedHost(host);
+    handleChange('visitHostId', host.id);
+  };
+
   const handleRegistrar = async () => {
     const allTouched = { company: true, fullName: true, visitHostId: true, reason: true, idType: true };
     setTouched(allTouched);
@@ -118,13 +120,12 @@ export default function NuevoVisitantePage() {
     setSubmitting(true);
     setSubmitError(null);
 
-    const host = hosts.find((h) => h.id === form.visitHostId);
     const result = await createVisitor({
-      fullName:           form.fullName,
-      company:            form.company,
-      visitHostId:        form.visitHostId,
-      visitTo:            host?.name ?? '',
-      reason:             form.reason,
+      fullName: form.fullName,
+      company: form.company,
+      visitHostId: form.visitHostId,
+      visitTo: selectedHost?.fullName ?? '',
+      reason: form.reason,
       identificationType: form.idType,
     });
 
@@ -137,7 +138,7 @@ export default function NuevoVisitantePage() {
 
     setFolioRegistro(result.folio!);
     setFechaRegistro(new Date().toISOString());
-    setVisitaALabel(host?.name ?? '');
+    setVisitaALabel(selectedHost?.fullName ?? '');
     setMostrarGafete(true);
   };
 
@@ -185,7 +186,6 @@ export default function NuevoVisitantePage() {
               <h2 className="text-lg font-bold text-slate-800">Datos del visitante</h2>
             </div>
 
-            {/* Compañía */}
             <div>
               <label className={labelBase} htmlFor="company">
                 <span className="flex items-center gap-1.5">
@@ -206,7 +206,6 @@ export default function NuevoVisitantePage() {
               {touched.company && errors.company && <ErrorMsg message={errors.company} />}
             </div>
 
-            {/* Nombre */}
             <div>
               <label className={labelBase} htmlFor="fullName">
                 <span className="flex items-center gap-1.5">
@@ -227,38 +226,21 @@ export default function NuevoVisitantePage() {
               {touched.fullName && errors.fullName && <ErrorMsg message={errors.fullName} />}
             </div>
 
-            {/* A quién visita — combobox desde DB */}
             <div>
-              <label className={labelBase} htmlFor="visitHostId">
+              <label className={labelBase}>
                 <span className="flex items-center gap-1.5">
                   <Users size={14} className="text-slate-400" />
                   A quién visita <span className="text-red-500">*</span>
                 </span>
               </label>
-              <div className="relative">
-                <select
-                  id="visitHostId"
-                  value={form.visitHostId}
-                  onChange={(e) => handleChange('visitHostId', e.target.value)}
-                  onBlur={() => handleBlur('visitHostId')}
-                  className={`${touched.visitHostId && errors.visitHostId ? inputError : inputNormal} pr-10`}
-                  disabled={hosts.length === 0}
-                >
-                  <option value="">
-                    {hosts.length === 0 ? 'Cargando anfitriones...' : 'Seleccionar...'}
-                  </option>
-                  {hosts.map((h) => (
-                    <option key={h.id} value={h.id}>
-                      {h.name}{h.position ? ` — ${h.position}` : ''}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              </div>
+              <VisitHostPicker
+                value={selectedHost}
+                onChange={handleHostSelect}
+                error={!!(touched.visitHostId && errors.visitHostId)}
+              />
               {touched.visitHostId && errors.visitHostId && <ErrorMsg message={errors.visitHostId} />}
             </div>
 
-            {/* Motivo */}
             <div>
               <label className={labelBase} htmlFor="reason">
                 <span className="flex items-center gap-1.5">
@@ -288,7 +270,6 @@ export default function NuevoVisitantePage() {
               {touched.reason && errors.reason && <ErrorMsg message={errors.reason} />}
             </div>
 
-            {/* Identificación */}
             <div>
               <label className={labelBase} htmlFor="idType">
                 <span className="flex items-center gap-1.5">

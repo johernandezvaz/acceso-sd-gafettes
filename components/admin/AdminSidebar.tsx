@@ -5,6 +5,9 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
+  Building2,
+  KeyRound,
+  History,
   ClipboardList,
   UserCheck,
   UserCog,
@@ -21,6 +24,9 @@ interface AdminSidebarProps {
 const baseNavItems = [
   { label: 'Dashboard', href: ROUTES.adminDashboard, icon: LayoutDashboard },
   { label: 'Personal', href: ROUTES.adminPersonal, icon: Users },
+  { label: 'Personas a visitar', href: ROUTES.adminVisitHosts, icon: Building2 },
+  { label: 'Llaves', href: ROUTES.adminLlaves, icon: KeyRound, exact: true },
+  { label: 'Registro de llaves', href: ROUTES.adminRegistroLlaves, icon: History },
   { label: 'Registros', href: ROUTES.adminRegistros, icon: ClipboardList },
   { label: 'Visitantes', href: ROUTES.adminVisitantes, icon: UserCheck },
 ]
@@ -33,7 +39,6 @@ const superAdminNavItems = [
 export default function AdminSidebar({ role, name }: AdminSidebarProps) {
   const pathname = usePathname()
   const isSuperAdmin = role === 'SUPERADMIN'
-  const allItems = isSuperAdmin ? [...baseNavItems, ...superAdminNavItems] : baseNavItems
 
   return (
     <aside className="w-60 bg-white border-r border-slate-200 flex flex-col flex-shrink-0 min-h-screen">
@@ -50,8 +55,10 @@ export default function AdminSidebar({ role, name }: AdminSidebarProps) {
 
       <nav className="flex-1 px-3 py-4 flex flex-col gap-1">
 
-        {baseNavItems.map(({ label, href, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + '/')
+        {baseNavItems.map(({ label, href, icon: Icon, exact }) => {
+          const active = exact
+            ? pathname === href
+            : pathname === href || pathname.startsWith(href + '/')
           return (
             <Link
               key={href}
