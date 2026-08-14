@@ -8,7 +8,7 @@ import {
   updatePerson,
   type PersonTypeOption,
 } from '@/app/actions/people'
-import { Plus, Search, X, Check, AlertCircle, Pencil, Truck, Clock, CreditCard } from 'lucide-react'
+import { Plus, Search, X, Check, AlertCircle, Pencil, Clock, CreditCard } from 'lucide-react'
 
 type Transportista = Awaited<ReturnType<typeof listPeople>>[number]
 
@@ -54,8 +54,7 @@ export default function AdminTransportistasPage() {
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
-            <Truck className="text-orange-600" size={26} />
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
             Transportistas
           </h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -244,7 +243,6 @@ function TransportistaModal({ personTypeId, person, onClose, onSaved }: Transpor
       <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden my-8">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
           <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <Truck size={20} className="text-orange-600" />
             {person ? 'Editar transportista' : 'Nuevo transportista'}
           </h2>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors">

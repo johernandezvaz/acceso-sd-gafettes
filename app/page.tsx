@@ -199,6 +199,7 @@ export default function HomePage() {
           </div>
         </section>
 
+        {/* Personal interno: 3 columnas */}
         <section>
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
             Personal interno
