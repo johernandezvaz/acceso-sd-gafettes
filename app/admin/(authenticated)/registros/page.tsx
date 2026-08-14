@@ -177,9 +177,9 @@ export default function AdminRegistrosPage() {
           <div className="flex gap-1 flex-wrap">
             {[
               { v: 'hoy', l: 'Hoy' },
-              { v: 'semana', l: 'Semana' },
-              { v: 'quincenal', l: 'Quincenal' },
-              { v: 'mes', l: 'Mes' },
+              { v: 'semana', l: 'Esta Semana' },
+              { v: 'quincenal', l: 'Esta Quincena' },
+              { v: 'mes', l: 'Este Mes' },
               { v: 'personalizado', l: 'Personalizado' },
             ].map(({ v, l }) => (
               <button
