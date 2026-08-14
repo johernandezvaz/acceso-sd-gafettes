@@ -6,13 +6,14 @@ import {
   UserPlus,
   LogOut,
   KeyRound,
-  BadgeX,
+  Truck,
   GraduationCap,
   Stethoscope,
   Sparkles,
   ShieldCheck,
+  ChevronRight,
 } from 'lucide-react';
-import PrimaryButton from '@/components/ui/PrimaryButton';
+import Link from 'next/link';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import StaffButton from '@/components/ui/StaffButton';
 import StatusBar from '@/components/ui/StatusBar';
@@ -82,28 +83,95 @@ export default function HomePage() {
 
       <main className="flex-1 flex flex-col gap-5 px-6 py-5 overflow-hidden">
 
-        <section>
-          <PrimaryButton
+        {/* Acciones principales de visitantes: 2 columnas */}
+        <section className="grid grid-cols-2 gap-4">
+          <Link
             href={ROUTES.nuevoVisitante}
-            icon={<UserPlus size={28} />}
-            label="Registrar nuevo visitante"
-            description="Captura datos, foto y gafete del visitante"
-          />
+            className="
+              flex items-center gap-4
+              w-full min-h-[88px] px-5 py-4
+              bg-blue-700 text-white
+              rounded-2xl
+              shadow-lg shadow-blue-900/25
+              active:scale-[0.98] active:bg-blue-800
+              transition-all duration-150
+              select-none touch-manipulation
+              group
+            "
+          >
+            <span className="
+              flex-shrink-0
+              w-13 h-13 w-12 h-12 flex items-center justify-center
+              bg-white/20 rounded-xl
+              text-white text-2xl
+            ">
+              <UserPlus size={26} />
+            </span>
+            <span className="flex-1 text-left">
+              <span className="block text-lg font-bold leading-tight tracking-tight">
+                Registrar nuevo visitante
+              </span>
+              <span className="block text-xs text-blue-100 mt-0.5 font-normal">
+                Captura de datos y gafete
+              </span>
+            </span>
+            <span className="
+              flex-shrink-0
+              w-8 h-8 flex items-center justify-center
+              bg-white/10 rounded-lg
+              text-white/80 group-active:text-white
+            ">
+              <ChevronRight size={18} strokeWidth={2.5} />
+            </span>
+          </Link>
+
+          <Link
+            href={ROUTES.salida}
+            className="
+              flex items-center gap-4
+              w-full min-h-[88px] px-5 py-4
+              bg-emerald-700 text-white
+              rounded-2xl
+              shadow-lg shadow-emerald-900/25
+              active:scale-[0.98] active:bg-emerald-800
+              transition-all duration-150
+              select-none touch-manipulation
+              group
+            "
+          >
+            <span className="
+              flex-shrink-0
+              w-12 h-12 flex items-center justify-center
+              bg-white/20 rounded-xl
+              text-white text-2xl
+            ">
+              <LogOut size={26} />
+            </span>
+            <span className="flex-1 text-left">
+              <span className="block text-lg font-bold leading-tight tracking-tight">
+                Registrar salida
+              </span>
+              <span className="block text-xs text-emerald-100 mt-0.5 font-normal">
+                Cerrar visita activa
+              </span>
+            </span>
+            <span className="
+              flex-shrink-0
+              w-8 h-8 flex items-center justify-center
+              bg-white/10 rounded-lg
+              text-white/80 group-active:text-white
+            ">
+              <ChevronRight size={18} strokeWidth={2.5} />
+            </span>
+          </Link>
         </section>
 
+        {/* Acciones rápidas: 3 columnas */}
         <section>
           <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">
             Acciones rápidas
           </h2>
-          <div className="grid grid-cols-2 gap-3">
-            <SecondaryButton
-              href={ROUTES.salida}
-              icon={<LogOut size={22} />}
-              label="Registrar salida"
-              description="Cerrar visita activa"
-              iconBg="bg-green-100"
-              iconColor="text-green-700"
-            />
+          <div className="grid grid-cols-3 gap-3">
             <SecondaryButton
               href={ROUTES.llaves}
               icon={<KeyRound size={22} />}
@@ -113,12 +181,12 @@ export default function HomePage() {
               iconColor="text-amber-700"
             />
             <SecondaryButton
-              href={ROUTES.sinGafete}
-              icon={<BadgeX size={22} />}
-              label="Sin gafete"
-              description="Acceso sin identificación"
-              iconBg="bg-red-100"
-              iconColor="text-red-700"
+              href={ROUTES.transportistas}
+              icon={<Truck size={22} />}
+              label="Transportistas"
+              description="Registro de transporte"
+              iconBg="bg-orange-100"
+              iconColor="text-orange-700"
             />
             <SecondaryButton
               href={ROUTES.practicantes}

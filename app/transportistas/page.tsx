@@ -4,20 +4,18 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
-  Sparkles,
   UserPlus,
   LogOut,
   KeyRound,
   Truck,
-  BadgeX,
   GraduationCap,
   Stethoscope,
+  Sparkles,
   ShieldCheck,
 } from 'lucide-react';
-import StatusBar from '@/components/ui/StatusBar';
-import PrimaryButton from '@/components/ui/PrimaryButton';
 import SecondaryButton from '@/components/ui/SecondaryButton';
 import StaffButton from '@/components/ui/StaffButton';
+import StatusBar from '@/components/ui/StatusBar';
 import RegistroGeneralModal from '@/components/modals/RegistroGeneralModal';
 import { SYSTEM_NAME, ROUTES } from '@/lib/constants';
 
@@ -38,7 +36,7 @@ function useClock() {
   return clock;
 }
 
-export default function LimpiezaPage() {
+export default function TransportistasPage() {
   const router = useRouter();
   const clock = useClock();
   const dateCapitalized = clock.date.charAt(0).toUpperCase() + clock.date.slice(1);
@@ -59,6 +57,7 @@ export default function LimpiezaPage() {
             <p className="text-sm text-slate-500 mt-1 font-medium capitalize">{dateCapitalized || '…'}</p>
           </div>
         </header>
+
         <main className="flex-1 flex flex-col gap-5 px-6 py-5 overflow-hidden">
           <section className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-4 w-full min-h-[88px] px-5 py-4 bg-blue-700 text-white rounded-2xl">
@@ -103,10 +102,10 @@ export default function LimpiezaPage() {
       </div>
 
       <RegistroGeneralModal
-        titulo="Limpieza"
-        subtitulo="Registro de entrada y salida de personal de limpieza"
-        personTypeSlug="limpieza"
-        labelBoton="Registrar movimiento"
+        titulo="Transportistas"
+        subtitulo="Registro de acceso para personal de transporte y logística"
+        personTypeSlug="transportistas"
+        labelBoton="Registrar transportista"
         onSuccess={() => router.push(ROUTES.home)}
         onClose={() => router.push(ROUTES.home)}
       />

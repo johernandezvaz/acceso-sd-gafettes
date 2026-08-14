@@ -1124,7 +1124,39 @@ El seed (`npm run db:seed`) inicializa las 6 llaves por defecto:
 
 1. **`useClock` duplicado:** Copiado en 5+ archivos. Candidato a `lib/hooks/useClock.ts`.
 2. **`inputBase/Normal/Error` duplicados:** En `visitante/nuevo/page.tsx` y `RegistroGeneralModal.tsx`. Candidatos a `lib/styles.ts` o `<FormInput>`.
-3. **Bug línea 220 de `RegistroGeneralModal.tsx`:** `(showToast || true)` siempre es `true`. Toast se renderiza siempre que `tipo !== null`.
-4. **Páginas de personal duplicadas:** Las 5 páginas son prácticamente idénticas. Candidatas a rutas dinámicas.
+3. **Páginas de personal duplicadas:** Las páginas de personal reutilizan `<RegistroGeneralModal>`.
+
+---
+
+## 21. Horarios, Pagos, Transportistas y Registros Diarios Agrupados
+
+### 1. Horarios y Periodicidad de Pago del Personal
+- **Horarios por Persona:** Cada registro en `Person` puede tener configurado su horario habitual de entrada (`scheduleEntry`, ej. `"08:00"`) y salida (`scheduleExit`, ej. `"17:00"`).
+- **Periodicidad de Pago:** Campo `paymentFrequency` (`SEMANAL` o `QUINCENAL`, por defecto `QUINCENAL`) configurable al crear o editar cualquier persona.
+- **Persistencia:** Almacenado directamente en PostgreSQL en la tabla `persons`.
+
+### 2. Catálogo y Módulo de Transportistas
+- **Sección Administrativa Propia (`/admin/transportistas`):** Apartado independiente en el menú lateral para gestionar exclusivamente al personal de transporte y logística.
+- **Acciones Disponibles:** Crear transportista, editar horario y pago, activar/desactivar y consultar entradas/salidas.
+- **Kiosco (`/transportistas`):** Botón dedicado dentro de *Acciones Rápidas* con modal de registro de entrada/salida táctil.
+
+### 3. Rediseño del Home (Kiosco Táctil)
+- **Acciones Principales (2 Columnas):** *Registrar nuevo visitante* (`/visitante/nuevo`) y *Registrar salida* (`/salida`) con igual jerarquía visual en la parte superior.
+- **Acciones Rápidas (3 Columnas):** *🔑 Llaves* (`/llaves`), *🚚 Transportistas* (`/transportistas`) y *🎓 Practicantes* (`/practicantes`).
+- **Personal Interno (3 Columnas):** *Personal médico*, *Limpieza* y *Seguridad*.
+- **Retiro de "Sin gafete":** Eliminado del flujo principal del kiosco.
+
+### 4. Registros de Acceso Diarios Agrupados (`/admin/registros`)
+- **Paradigma: 1 Fila = 1 Persona en 1 Día:** La tabla colapsa todos los movimientos de una persona en la misma fecha en una única fila representativa de su jornada laboral.
+- **Cálculo de Horas Trabajadas:** Suma los intervalos válidos `(EXIT - ENTRY)` en el mismo día y formatea el resultado en horas y minutos (ej. `08h 00m` o `00h 09m`).
+- **Múltiples Movimientos:** Si una persona entra y sale varias veces en el día (ej. salida a comer), la fila muestra la primera entrada, la última salida, la sumatoria acumulada de horas trabajadas y un botón para inspeccionar el desglose de cada movimiento.
+- **Estados de Jornada:**
+  - `Completo` (Verde): Entradas y salidas cerradas correctamente.
+  - `En curso` (Azul/Ámbar): Entrada activa sin registro de salida.
+  - `Inconsistente` (Rojo): Salida registrada sin entrada previa.
+- **Filtro Quincenal:** Nuevo selector de rango de 15 días (1ª quincena: días 1 a 15; 2ª quincena: día 16 al fin de mes).
+- **Paginación y Agrupación en Servidor:** Procesado mediante server actions en `app/actions/access.ts` (`getDailyAccessRecords`) para alto rendimiento y escalabilidad.
+- **Trazabilidad Total:** En PostgreSQL se conservan todos y cada uno de los movimientos individuales en `access_records`.
+
 
 

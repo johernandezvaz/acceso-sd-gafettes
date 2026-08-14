@@ -17,6 +17,7 @@ async function main() {
     { name: 'Seguridad', slug: 'seguridad', description: 'Personal de seguridad' },
     { name: 'Limpieza', slug: 'limpieza', description: 'Personal de limpieza e intendencia' },
     { name: 'Médico', slug: 'medico', description: 'Personal médico y de enfermería' },
+    { name: 'Transportistas', slug: 'transportistas', description: 'Personal de transporte y logística' },
   ]
 
   for (const pt of personTypes) {

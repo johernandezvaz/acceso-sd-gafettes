@@ -1,694 +1,1037 @@
-# CORRECCIÓN — AUTORIZACIÓN PARA SOLICITAR LLAVES
+# CAMBIOS FUNCIONALES Y DE INTERFAZ — HORARIOS, PAGOS, TRANSPORTISTAS Y REGISTROS
 
 
-Necesitamos modificar el módulo de llaves para establecer correctamente quién puede solicitar/tomar una llave.
+Hemos revisado la plataforma funcionando en vivo y necesitamos realizar una serie de cambios funcionales, de base de datos y de interfaz.
 
 
-## 1. PERSONAS AUTORIZADAS
+IMPORTANTE:
 
 
-Las personas que pueden tomar una llave serán exactamente las mismas personas que actualmente pueden ser seleccionadas como:
+Antes de modificar código, lee y comprende:
 
 
-"A quién visita"
+- README.md
+- estructura completa del proyecto
+- esquema actual de Prisma
+- modelos relacionados con usuarios, personas y registros
+- flujo actual de entrada/salida
+- dashboard administrativo
+- kiosco principal
+- sidebar
+- componentes reutilizables
 
 
-Es decir, deben provenir del catálogo existente:
+No rompas las funcionalidades existentes.
 
 
-VisitHost
-
-
-NO crear un nuevo catálogo de personas para las llaves.
-
-
-La fuente de verdad debe ser:
-
-
-PostgreSQL
-    ↓
-VisitHost
-    ↓
-Personas autorizadas para recibir visitantes
-    ↓
-Personas autorizadas para solicitar llaves
+Los cambios deben integrarse con la arquitectura actual y PostgreSQL.
 
 
 ---
 
 
-# 2. EXCEPCIÓN: LIMPIEZA
+# 1. ASIGNAR HORARIO A LAS PERSONAS
 
 
-Además de las personas existentes en `VisitHost`, debe existir una opción especial:
+Necesitamos agregar la posibilidad de asignar un horario a las personas que corresponda.
 
 
-```text
-Limpieza
+En el dashboard administrativo, al crear o editar una persona debe existir una sección:
 
-Esta opción NO representa a una persona específica.
 
-No queremos registrar los nombres individuales del personal de limpieza porque existe mucha rotación.
+"Horario"
 
-Por lo tanto:
 
-VisitHost
-    ├── Personas reales
-    │
-    └── NO incluye necesariamente "Limpieza"
+Debe permitir configurar, como mínimo:
 
-y para el módulo de llaves tendremos una opción adicional/global:
 
-Limpieza
-3. FLUJO PARA TOMAR UNA LLAVE
+- Hora de entrada.
+- Hora de salida.
 
-Actualmente el modal permite escribir manualmente:
-
-Nombre del empleado
-[ Nombre completo ]
-
-Esto debe eliminarse.
-
-No queremos que el usuario pueda escribir cualquier nombre.
-
-El nuevo flujo debe ser exactamente similar al flujo de selección de:
-
-"A quién visita"
-
-Es decir:
-
-Llave disponible
-       ↓
-Tomar
-       ↓
-¿Quién solicita la llave?
-       ↓
-Abrir buscador
-       ↓
-Buscar persona
-       ↓
-Seleccionar persona
-       ↓
-Confirmar
-4. BUSCADOR
-
-El selector debe utilizar un popup/modal de búsqueda.
-
-No mostrar un combobox enorme con todas las personas cargadas desde el inicio.
-
-Debe utilizar el mismo patrón UX que ya implementamos para VisitHost.
 
 Ejemplo:
 
-┌─────────────────────────────────────────┐
-│ ¿Quién solicita la llave?            × │
-│                                         │
-│ [ 🔍 Buscar persona...                 ] │
-│                                         │
-│ Resultados                               │
-│                                         │
-│ Juan Pérez                               │
-│ Supervisor de Procesos                   │
-│ Manufactura                              │
-│                                         │
-│ María González                           │
-│ Analista                                 │
-│ Recursos Humanos                          │
-│                                         │
-│ ─────────────────────────────────────── │
-│                                         │
-│ 🧹 Limpieza                              │
-│ Personal de limpieza                    │
-└─────────────────────────────────────────┘
-5. BÚSQUEDA
 
-La búsqueda de personas debe consultar:
+```text
+Horario
 
-VisitHost
 
-y debe permitir buscar por:
+Entrada:
+[ 08:00 ]
 
-Nombre.
-Número de empleado.
-Departamento.
-Puesto.
 
-Debe ser:
+Salida:
+[ 17:00 ]
 
-Case-insensitive.
-Parcial.
-Server-side.
-Utilizando Prisma/PostgreSQL.
+Esto debe persistirse en PostgreSQL.
 
-No cargar todo el catálogo al navegador para realizar el filtro.
+No hardcodear horarios.
 
-6. LIMPIEZA COMO OPCIÓN ESPECIAL
+2. HORARIO POR PERSONA
 
-La opción:
+El horario debe pertenecer a la persona correspondiente.
 
-Limpieza
+Debe permitir que diferentes personas tengan diferentes horarios.
 
-debe aparecer siempre como una opción adicional dentro del selector.
+Ejemplo:
 
-No debe requerir buscar un nombre específico.
+Juan Pérez
+Horario:
+08:00 - 17:00
+María González
+Horario:
+09:00 - 18:00
+
+No asumir que todos tienen el mismo horario.
+
+3. PAGO POR SEMANA O QUINCENA
+
+Necesitamos agregar a las personas que corresponda una configuración de periodicidad de pago.
+
+Opciones:
+
+Semanal
+Quincenal
 
 Por ejemplo:
 
-Buscar persona...
+Practicante:
+Pago: Quincenal
+
+o:
+
+Practicante:
+Pago: Semanal
+
+Este dato debe persistirse en PostgreSQL.
+
+4. ¿A QUIÉNES APLICA EL PAGO?
+
+La periodicidad de pago debe ser configurable principalmente para personas como practicantes, pero la arquitectura debe permitir utilizarla para otros tipos de personal si posteriormente se requiere.
+
+No hardcodear:
+
+Practicantes = Quincenal
+
+El usuario administrativo debe poder seleccionar:
+
+Semanal
+Quincenal
+
+al crear/editar la persona cuando corresponda.
+
+5. HORAS TRABAJADAS
+
+Necesitamos calcular las horas trabajadas utilizando:
+
+Entrada
+Salida
+
+Por ejemplo:
+
+Entrada: 08:00
+Salida: 17:00
 
 
-Resultados:
+Total:
+9 horas
 
+Si existen minutos:
+
+Entrada: 08:15
+Salida: 17:42
+
+
+Total:
+9h 27m
+
+El cálculo debe hacerse a partir de los timestamps reales almacenados en PostgreSQL.
+
+No almacenar manualmente el total de horas como valor independiente si puede calcularse de manera confiable a partir de entrada/salida.
+
+6. PERSONAS A LAS QUE APLICA EL CÁLCULO
+
+El cálculo de horas aplica al personal que registra entrada y salida.
+
+NO aplicar este concepto de la misma manera a:
+
+Visitantes externos.
+
+Los visitantes externos tienen su propio flujo de entrada/salida y deben continuar en su sección independiente.
+
+7. NUEVO TIPO: TRANSPORTISTAS
+
+Necesitamos agregar un nuevo tipo de personal:
+
+Transportistas
+
+Debe funcionar conceptualmente igual que:
+
+Practicantes.
+Limpieza.
+Seguridad.
+Personal médico.
+
+Pero tiene una diferencia importante:
+
+Transportistas tendrá su propio apartado.
+
+No debe quedar combinado dentro del apartado genérico de "Personal".
+
+8. TRANSPORTISTAS EN EL SIDEBAR
+
+Agregar una nueva opción en el sidebar administrativo:
+
+Transportistas
+
+Debe tener su propia ruta/página.
+
+Por ejemplo:
+
+/admin/transportistas
+
+o la estructura equivalente existente.
+
+9. TRANSPORTISTAS COMO CATÁLOGO PROPIO
+
+Los transportistas deben poder:
+
+Ver sus registros.
+Crear transportistas.
+Editar transportistas.
+Activar/desactivar transportistas.
+Configurar horario.
+Configurar periodicidad de pago.
+Consultar entradas y salidas.
+
+No mezclarlos visualmente con:
+
+/admin/personal
+
+aunque internamente puedan reutilizar modelos/componentes.
+
+10. REGISTRO DE TRANSPORTISTAS EN EL KIOSCO
+
+En el kiosco principal debe aparecer:
+
+Transportistas
+
+como una opción independiente.
+
+Debe funcionar igual que:
+
+Practicantes
+Limpieza
+Seguridad
+Personal médico
+
+permitiendo seleccionar al transportista y registrar:
+
+Entrada
+Salida
+
+La información debe persistirse en PostgreSQL.
+
+11. CAMBIO DEL HOME / KIOSCO PRINCIPAL
+
+Actualmente la interfaz tiene:
+
+Registrar nuevo visitante
+Registrar salida
+Llaves
+Sin gafete
+Practicantes
+
+
+Personal médico
+Limpieza
+Seguridad
+
+como se observa en la interfaz actual.
+
+Necesitamos simplificarla.
+
+12. REGISTRAR NUEVO VISITANTE
+
+El botón:
+
+Registrar nuevo visitante
+
+actualmente ocupa prácticamente todo el ancho.
+
+Debe hacerse más compacto.
+
+No debe ocupar toda la fila.
+
+La parte superior debe convertirse en dos acciones principales:
+
+┌──────────────────────────────┬──────────────────────┐
+│ Registrar nuevo visitante    │ Registrar salida     │
+│ Captura de datos...          │ Cerrar visita activa │
+└──────────────────────────────┴──────────────────────┘
+
+Ambos deben tener aproximadamente la misma jerarquía visual.
+
+"Registrar nuevo visitante" debe dejar de ser un banner gigante.
+
+13. ACCIONES RÁPIDAS
+
+Eliminar de "Acciones rápidas":
+
+Sin gafete
+
+No debe aparecer más en el kiosco.
+
+En su lugar, las acciones rápidas deben quedar exactamente como:
+
+Llaves
+Transportistas
+Practicantes
+
+Por ejemplo:
+
+ACCIONES RÁPIDAS
+
+
+┌──────────────┬──────────────┬──────────────┐
+│ 🔑 Llaves    │ 🚚 Transport.│ 🎓 Practic.  │
+│ Control...   │ Registro...  │ Registro...  │
+└──────────────┴──────────────┴──────────────┘
+
+La composición exacta puede adaptarse al diseño existente.
+
+14. PERSONAL INTERNO
+
+Debajo de las acciones rápidas puede continuar existiendo:
+
+PERSONAL INTERNO
+
+
+Personal médico
+Limpieza
+Seguridad
+
+Transportistas NO deben agregarse aquí si ya tienen su propia sección dentro de acciones rápidas.
+
+Evitar duplicar botones.
+
+15. SIDEBAR ADMINISTRATIVO
+
+Agregar:
+
+Transportistas
+
+como sección independiente.
+
+No ocultarlo dentro de "Personal".
+
+La navegación debe permitir entrar directamente a:
+
+Transportistas
+
+y administrar exclusivamente ese tipo de personal.
+
+16. CAMBIO FUNDAMENTAL EN REGISTROS DE ACCESO
+
+Actualmente la pantalla:
+
+Registros de acceso
+
+muestra una fila por cada movimiento.
+
+Por ejemplo:
+
+ERNESTO COLIN ESCALERA | Practicantes | Salida  | 15:52 | 14/08/2026
+ERNESTO COLIN ESCALERA | Practicantes | Entrada | 15:43 | 14/08/2026
+
+Esto debe cambiar.
+
+NO queremos una fila por movimiento.
+
+Queremos una fila por:
+
+Persona + Día
+17. NUEVA ESTRUCTURA DE REGISTROS
+
+La tabla debe mostrar:
+
+Persona
+Tipo
+Fecha
+Entrada
+Salida
+Total de horas
+
+Ejemplo:
+
+┌──────────────────────┬──────────────┬────────────┬─────────┬─────────┬──────────────┐
+│ Persona              │ Tipo         │ Fecha      │ Entrada │ Salida  │ Total horas  │
+├──────────────────────┼──────────────┼────────────┼─────────┼─────────┼──────────────┤
+│ ERNESTO COLIN...     │ Practicantes │ 14/08/2026 │ 15:43  │ 15:52  │ 00h 09m      │
+└──────────────────────┴──────────────┴────────────┴─────────┴─────────┴──────────────┘
+
+Una persona que tenga entrada y salida el mismo día debe aparecer UNA SOLA VEZ.
+
+18. AGRUPACIÓN POR DÍA
+
+El concepto de registro debe ser:
+
+persona + fecha
+
+Por ejemplo:
 
 Juan Pérez
-María González
+14/08/2026
+Entrada 08:00
+Salida 17:00
+
+es una sola fila.
+
+Si se filtra por una semana:
+
+Semana
+
+una persona que haya trabajado los 7 días puede tener:
+
+Máximo 7 filas
+
+una por cada día.
+
+NO mostrar 14 filas por tener 7 entradas + 7 salidas.
+
+19. CASO SIN SALIDA
+
+Si una persona tiene:
+
+Entrada: 08:00
+Salida: NULL
+
+mostrar:
+
+Entrada: 08:00
+Salida: —
+Total horas: En curso
+
+No inventar una hora de salida.
+
+Para el cálculo de horas en curso, si se decide mostrar tiempo transcurrido, debe distinguirse visualmente de un total cerrado.
+
+20. CASO SIN ENTRADA
+
+Si existe una salida sin una entrada correspondiente, no asumir una entrada.
+
+Mostrar:
+
+Entrada: —
+Salida: 17:00
+Total horas: —
+
+Y, si es necesario, marcarlo como inconsistente.
+
+No inventar datos.
+
+21. MULTIPLES ENTRADAS/SALIDAS EN UN MISMO DÍA
+
+Debemos considerar que una persona podría registrar más de una entrada/salida en un mismo día.
+
+No eliminar información histórica.
+
+La interfaz principal debe seguir mostrando una sola fila por:
+
+Persona + Día
+
+Si existen múltiples pares de entrada/salida en un día, calcula el total diario sumando los intervalos válidos.
+
+Ejemplo:
+
+Entrada 08:00
+Salida 12:00
 
 
-──────────────
+Entrada 13:00
+Salida 17:00
+
+La fila debe mostrar:
+
+Entrada: 08:00
+Salida: 17:00
+Total horas: 08h 00m
+
+El detalle de los movimientos individuales puede abrirse en un modal/detalle si resulta necesario.
+
+No perder los registros individuales en la base de datos.
+
+22. TOTAL DE HORAS
+
+Agregar una columna:
+
+Total de horas
+
+El cálculo debe ser:
+
+Salida - Entrada
+
+o la suma de intervalos válidos cuando existan múltiples movimientos.
+
+Ejemplo:
+
+08:00 → 17:00
 
 
+Total:
+09h 00m
+
+Otro:
+
+08:15 → 17:42
+
+
+Total:
+09h 27m
+23. FILTRO DE FECHA
+
+Actualmente existen:
+
+Hoy
+Semana
+Mes
+Personalizado
+
+Agregar:
+
+Quincenal
+
+La barra debe quedar:
+
+Hoy
+Semana
+Mes
+Quincenal
+Personalizado
+24. FILTRO QUINCENAL
+
+"Quincenal" debe representar un período de 15 días.
+
+Debe definirse claramente el rango que se está consultando.
+
+Por ejemplo:
+
+Quincena actual
+
+y/o según la lógica existente del proyecto.
+
+IMPORTANTE:
+
+No confundir "quincenal" con "mes".
+
+Debe consultar exactamente un período de 15 días.
+
+Si el sistema necesita distinguir:
+
+1ª quincena: 1–15
+2ª quincena: 16–fin de mes
+
+utiliza esa lógica, siempre que sea coherente con la implementación de periodicidad de pago existente.
+
+25. RELACIÓN ENTRE FILTRO QUINCENAL Y PAGO
+
+El filtro:
+
+Quincenal
+
+de registros representa un período de consulta de 15 días.
+
+No significa necesariamente que solo las personas con:
+
+payment_frequency = QUINCENAL
+
+aparezcan.
+
+El filtro de fecha y la periodicidad de pago son conceptos distintos.
+
+Una persona con pago semanal puede ser consultada dentro de un rango quincenal.
+
+26. BÚSQUEDA POR PERSONA
+
+Conservar el buscador actual:
+
+BUSCAR PERSONA
+
+
+Nombre completo o parcial...
+
+Debe continuar funcionando.
+
+Debe buscar en los registros agrupados por persona/día.
+
+Ejemplo:
+
+Buscar:
+Ernesto
+
+mostrar los días correspondientes a Ernesto.
+
+27. FILTRO POR TIPO
+
+Conservar:
+
+Tipo
+
+pero agregar Transportistas como tipo disponible.
+
+Por ejemplo:
+
+Todos
+Practicantes
+Seguridad
 Limpieza
+Personal médico
+Transportistas
 
-Si el usuario selecciona:
+Los valores deben provenir de la arquitectura actual y no estar duplicados innecesariamente.
 
-Limpieza
+28. MOVIMIENTO
 
-el registro de la llave debe indicar claramente que fue solicitada por:
+El filtro actual:
 
-Limpieza
-7. BASE DE DATOS
+Movimiento
+Todos
+Entrada
+Salida
 
-Necesitamos adaptar el modelo KeyAssignment.
+ya no tiene sentido exactamente igual porque la tabla ahora representa una jornada diaria.
 
-Actualmente se planteó:
+Por lo tanto, analizar y adaptar este filtro.
 
-KeyAssignment
-├── id
-├── key_id
-├── person_id
-├── taken_at
-├── returned_at
-└── created_at
+Una opción preferida sería:
 
-Esto funciona para personas reales, pero necesitamos soportar también el caso:
-
-Limpieza
-
-sin crear una persona ficticia en Person.
-
-NO crear:
-
-Person:
-nombre = "Limpieza"
-
-porque conceptualmente no es una persona.
-
-Tampoco crear múltiples usuarios/personas de limpieza.
-
-8. MODELADO RECOMENDADO
-
-Adapta KeyAssignment para permitir que el solicitante pueda ser:
-
-Una persona real de VisitHost.
-El grupo especial Limpieza.
-
-La solución debe mantener una relación real con la persona cuando se trate de un empleado.
-
-Por ejemplo, puedes utilizar una estructura equivalente a:
-
-KeyAssignment
-├── id
-├── key_id
-├── visit_host_id      nullable
-├── requester_type
-├── requester_label
-├── taken_at
-├── returned_at
-└── created_at
+Estado
+Todos
+Completo
+En curso
+Inconsistente
 
 Donde:
 
-requester_type:
-PERSON
-CLEANING
+Completo
+
+Existe entrada y salida.
+
+En curso
+
+Existe entrada pero no salida.
+
+Inconsistente
+
+Existe salida pero no entrada.
+
+No mantener "Entrada/Salida" como filtro principal si contradice el nuevo modelo visual.
+
+29. CONSULTA A BASE DE DATOS
+
+IMPORTANTE:
+
+La agrupación por:
+
+persona + día
+
+debe hacerse correctamente a nivel de servidor/consulta.
+
+No cargar todos los movimientos históricos al navegador para después agruparlos con JavaScript.
+
+La consulta debe:
+
+Aplicar filtros de fecha.
+Aplicar filtro de persona.
+Aplicar filtro de tipo.
+Obtener movimientos relevantes.
+Agrupar por persona y fecha.
+Resolver entrada/salida.
+Calcular total de horas.
+Devolver solamente los registros necesarios para la tabla.
+
+Utilizar Prisma/PostgreSQL.
+
+30. PAGINACIÓN
+
+Si existe paginación actualmente, adaptarla al nuevo modelo.
+
+La paginación debe aplicarse sobre:
+
+Persona + Día
+
+y no sobre movimientos individuales.
+
+31. DASHBOARD DE PERSONAL
+
+Al crear/editar personas, agregar:
+
+Horario
 
 y:
 
-visit_host_id
+Periodicidad de pago
 
-solo se utiliza cuando:
+Ejemplo:
 
-requester_type = PERSON
+Nombre:
+Juan Pérez
 
-Para:
 
-requester_type = CLEANING
+Tipo:
+Practicantes
 
-el registro debe representar simplemente:
 
-Limpieza
+Horario:
+Entrada [08:00]
+Salida  [17:00]
 
-No inventes una persona.
 
-Si existe una solución más limpia con un enum/modelo diferente, puedes utilizarla, pero debe mantener estos principios.
+Pago:
+( ) Semanal
+( ) Quincenal
+32. TRANSPORTISTAS — ADMIN
 
-9. IMPORTANTE: NO USAR Person SI NO CORRESPONDE
+Crear una página administrativa propia para transportistas.
 
-Anteriormente se planteó relacionar:
+Debe permitir:
 
-KeyAssignment → Person
+Lista de transportistas
+Agregar transportista
+Editar
+Activar/desactivar
+Horario
+Periodicidad de pago
 
-para identificar quién toma una llave.
+Y consultar sus registros de acceso.
 
-Debemos corregir esta parte.
+Reutilizar los componentes existentes cuando sea posible.
 
-Las personas autorizadas para tomar llaves son las de:
+No duplicar lógica innecesariamente.
 
-VisitHost
+33. TRANSPORTISTAS — KIOSCO
 
-no necesariamente todas las personas de:
+En el kiosco:
 
-Person
+Transportistas
 
-Por lo tanto, NO permitir que cualquier:
+debe abrir un flujo equivalente al de Practicantes/Limpieza/Seguridad.
 
-Seguridad.
-Limpieza.
-Médico.
-Practicante.
+Debe utilizar el catálogo de personas de Transportistas.
 
-pueda solicitar una llave únicamente por estar registrado en Person.
+La selección debe ser mediante el mismo tipo de combobox/buscador utilizado actualmente para el personal.
 
-La autorización para solicitar llaves debe basarse en:
+No permitir escribir nombres arbitrarios.
 
-VisitHost
-+
-Limpieza
-10. RELACIONES
+34. BASE DE DATOS
 
-La relación conceptual debe quedar:
+Analiza el esquema actual antes de modificarlo.
 
-VisitHost
-    │
-    │
-    ▼
-KeyAssignment
-    │
-    ▼
-Key
-
-y adicionalmente:
-
-CLEANING
-    │
-    ▼
-KeyAssignment
-    │
-    ▼
-Key
-
-Por lo tanto:
-
-                ┌── VisitHost
-                │
-Requester ──────┤
-                │
-                └── CLEANING
-                       │
-                       ▼
-                  KeyAssignment
-                       │
-                       ▼
-                      Key
-11. INFORMACIÓN MOSTRADA EN EL KIOSCO
-
-Cuando una llave está ocupada, debe mostrarse:
+Necesitamos soportar:
 
 Persona
-Juan Pérez
+horario_entrada
+horario_salida
+payment_frequency
 
-o:
+o nombres equivalentes siguiendo la convención actual.
 
-Limpieza
-Limpieza
+Tipo Transportistas
 
-Por ejemplo:
+Agregar el tipo correspondiente.
 
-Sala Mezquite
+Registros
+
+No eliminar los movimientos individuales.
+
+La base de datos debe continuar almacenando cada:
+
+ENTRY
+EXIT
+
+individualmente.
+
+La agrupación:
+
+persona + día
+
+es únicamente para la vista administrativa.
+
+Esto es MUY IMPORTANTE.
+
+No convertir la tabla histórica de movimientos en una tabla diaria porque perderíamos trazabilidad.
+
+35. HISTORIAL
+
+Debe mantenerse el historial individual.
+
+Ejemplo:
+
+AccessRecord
 
 
-En uso
+08:00 ENTRY
+12:00 EXIT
+13:00 ENTRY
+17:00 EXIT
 
+La interfaz puede mostrar:
 
-Juan Pérez
-hace 35m
+08:00 | 17:00 | 08h 00m
 
-o:
+pero los cuatro movimientos deben continuar existiendo en PostgreSQL.
 
-Sala Agave
+36. AUDITORÍA
 
+Las nuevas operaciones administrativas deben continuar utilizando el sistema de AuditLog existente.
 
-En uso
+Especialmente:
 
+CREATE_PERSON
+UPDATE_PERSON
+UPDATE_SCHEDULE
+UPDATE_PAYMENT_FREQUENCY
+CREATE_TRANSPORTER
+UPDATE_TRANSPORTER
+DEACTIVATE_TRANSPORTER
+ACTIVATE_TRANSPORTER
 
-Limpieza
-hace 12m
-12. DEVOLUCIÓN
+Utilizar los nombres/conceptos existentes de AuditLog si ya hay convenciones establecidas.
 
-La devolución funciona exactamente igual independientemente de quién haya tomado la llave.
+37. HOME / KIOSCO — DISEÑO FINAL
 
-Si fue:
+La interfaz debería evolucionar aproximadamente hacia:
 
-Juan Pérez
+┌──────────────────────────────────────────────────────────────┐
+│ CODA                                      Hora / Fecha       │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│ ┌────────────────────────────┐ ┌───────────────────────────┐ │
+│ │ Registrar nuevo visitante  │ │ Registrar salida          │ │
+│ │ Captura de datos...        │ │ Cerrar visita activa      │ │
+│ └────────────────────────────┘ └───────────────────────────┘ │
+│                                                              │
+│ ACCIONES RÁPIDAS                                              │
+│                                                              │
+│ ┌────────────┐ ┌───────────────┐ ┌──────────────┐            │
+│ │ 🔑 Llaves  │ │ 🚚 Transport. │ │ 🎓 Practic.  │            │
+│ │            │ │               │ │              │            │
+│ └────────────┘ └───────────────┘ └──────────────┘            │
+│                                                              │
+│ PERSONAL INTERNO                                              │
+│                                                              │
+│ ┌────────────────┐ ┌──────────────┐ ┌──────────────┐         │
+│ │ Personal médico│ │ Limpieza     │ │ Seguridad    │         │
+│ └────────────────┘ └──────────────┘ └──────────────┘         │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 
-mostrar:
+No es necesario copiar exactamente este diseño, pero sí respetar la nueva jerarquía:
 
-¿Confirmas que Juan Pérez devuelve la llave de Sala Agave?
+Visitante.
+Salida.
+Llaves.
+Transportistas.
+Practicantes.
+Personal interno restante.
+38. ELIMINAR "SIN GAFETE"
 
-Si fue:
+Eliminar completamente del kiosco:
 
-Limpieza
+Sin gafete
 
-mostrar:
+No debe quedar:
 
-¿Confirmas que Limpieza devuelve la llave de Sala Agave?
+Botón.
+Ruta.
+Acceso desde home.
+Referencia visual.
 
-Al devolver:
+Antes de eliminarlo, verifica si alguna funcionalidad depende de esta ruta.
 
-returned_at = ahora
+Si existe lógica relacionada, no eliminar datos históricos; únicamente retirar la opción de acceso si ese es el objetivo.
 
-y conservar el historial.
+39. NO ROMPER VISITANTES
 
-13. HISTORIAL ADMINISTRATIVO
+Los visitantes externos continúan teniendo su propio flujo:
 
-En:
+Registrar visitante
+Registrar salida
 
-/admin/llaves/registro
+No mezclar visitantes con:
 
-el registro debe mostrar:
+horas trabajadas
+horarios
+periodicidad de pago
 
-Persona / Solicitante
-Llave
-Fecha
-Hora de toma
-Hora de devolución
-Duración
+Los visitantes siguen siendo externos.
+
+40. VALIDACIONES
+
+Al guardar horario:
+
+Validar hora de entrada.
+Validar hora de salida.
+Permitir horarios válidos.
+No aceptar valores inválidos.
+
+Al calcular horas:
+
+Manejar correctamente minutos.
+No producir valores negativos.
+Manejar registros sin salida.
+Manejar registros inconsistentes.
+41. ZONA HORARIA
+
+Utilizar la misma zona horaria que actualmente utiliza CODA para los registros.
+
+No introducir una nueva zona horaria arbitrariamente.
+
+Los cálculos de entrada/salida deben utilizar timestamps consistentes.
+
+42. README
+
+Actualizar README.md con:
+
+Nuevo concepto de horarios.
+Periodicidad de pago.
+Tipo Transportistas.
+Ruta/sección de Transportistas.
+Nuevo modelo de visualización de registros.
+Agrupación por persona + día.
+Cálculo de horas.
+Filtro Quincenal.
+Estados de registro.
+Funcionamiento de entradas/salidas múltiples en un mismo día.
+43. MIGRACIONES
+
+Si el esquema actual no soporta:
+
+Horario.
+Periodicidad de pago.
+Transportistas.
+
+crear las migraciones Prisma necesarias.
+
+NO eliminar datos existentes.
+
+Antes de modificar tablas existentes, revisar:
+
+foreign keys;
+relaciones;
+índices;
+datos actuales.
+
+Las migraciones deben ser reversibles/reproducibles.
+
+44. VERIFICACIÓN
+
+Ejecutar:
+
+npm run db:generate
+npm run typecheck
+npm run lint
+npm run build
+
+Y probar manualmente:
+
+Practicante
+Crear/editar practicante.
+Asignar horario 08:00–17:00.
+Asignar pago quincenal.
+Registrar entrada.
+Registrar salida.
+Ir a Registros.
+Ver una sola fila.
+Ver Entrada 08:00.
+Ver Salida 17:00.
+Ver Total horas 09h 00m.
+Semana
+
+Registrar una persona durante varios días.
+
+Filtrar:
+
+Semana
+
+Verificar que exista como máximo una fila por persona por día.
+
+Quincena
+
+Filtrar:
+
+Quincenal
+
+Verificar que el rango corresponda a 15 días según la lógica definida.
+
+Transportista
+Crear transportista.
+Asignar horario.
+Asignar pago.
+Registrar entrada.
+Registrar salida.
+Verificar registro diario.
+Verificar que aparezca en el filtro de tipo Transportistas.
+Verificar que tenga su propia sección administrativa.
+Sin salida
+
+Registrar entrada sin salida.
+
+Debe mostrar:
+
+Entrada: 08:00
+Salida: —
+Total horas: En curso
+Múltiples movimientos
+
+Registrar:
+
+08:00 Entrada
+12:00 Salida
+13:00 Entrada
+17:00 Salida
+
+Debe mostrar una sola fila:
+
+Entrada: 08:00
+Salida: 17:00
+Total: 08h 00m
+
+pero mantener los cuatro movimientos en la base de datos.
+
+45. CRITERIO DE ÉXITO
+
+El cambio principal es pasar de:
+
+UNA FILA = UN MOVIMIENTO
+
+a:
+
+UNA FILA = UNA PERSONA EN UN DÍA
+
+manteniendo en PostgreSQL:
+
+TODOS LOS MOVIMIENTOS INDIVIDUALES
+
+La interfaz final de registros debe ser:
+
+┌──────────────────────┬──────────────┬────────────┬─────────┬─────────┬──────────────┐
+│ Persona              │ Tipo         │ Fecha      │ Entrada │ Salida  │ Total horas  │
+├──────────────────────┼──────────────┼────────────┼─────────┼─────────┼──────────────┤
+│ Ernesto Colin        │ Practicantes │ 14/08/2026 │ 15:43  │ 15:52  │ 00h 09m      │
+└──────────────────────┴──────────────┴────────────┴─────────┴─────────┴──────────────┘
+
+Y los filtros:
+
+Buscar persona
+Hoy
+Semana
+Mes
+Quincenal
+Personalizado
+Tipo
 Estado
 
-Para una persona:
+La pantalla debe ser considerablemente más limpia que la actual y evitar duplicar filas de entrada/salida.
 
-Juan Pérez
-Sala Agave
-14/08/2026
-08:15
-16:02
-7h 47m
-Devuelta
-
-Para limpieza:
-
-Limpieza
-Sala Agave
-14/08/2026
-08:15
-09:20
-1h 05m
-Devuelta
-14. BUSCADOR DEL REGISTRO
-
-El buscador existente de:
-
-/admin/llaves/registro
-
-también debe encontrar:
-
-Juan Pérez
-
-y:
-
-Limpieza
-
-Por ejemplo:
-
-Buscar: limpieza
-
-debe mostrar todos los registros históricos donde:
-
-requester_type = CLEANING
-15. FILTRO POR SOLICITANTE
-
-Si es posible, agrega un filtro:
-
-Solicitante:
-[ Todos ▼ ]
-
-con:
-
-Todos
-Personas
-Limpieza
-
-Opcionalmente, dentro de personas puede buscarse por nombre.
-
-16. VISITHOST INACTIVO
-
-Si un VisitHost es desactivado:
-
-active = false
-
-debe dejar de aparecer como opción para nuevas solicitudes de llaves.
-
-Pero los registros históricos deben permanecer.
-
-Por ejemplo:
-
-Juan Pérez
-active = false
-
-No debe poder tomar una nueva llave.
-
-Sin embargo:
-
-KeyAssignment
-Juan Pérez
-14/08/2026
-
-debe seguir existiendo en el historial.
-
-17. LIMPIEZA SIEMPRE DISPONIBLE
-
-La opción:
-
-Limpieza
-
-debe estar disponible independientemente de los registros de VisitHost.
-
-No depende de:
-
-VisitHost.active
-
-porque no representa a una persona específica.
-
-18. NO DUPLICAR CATÁLOGOS
-
-No crear:
-
-KeyPeople
-KeyRequesters
-AuthorizedKeyUsers
-
-ni ninguna tabla equivalente para duplicar VisitHost.
-
-Utilizar:
-
-VisitHost
-
-como catálogo existente de personas autorizadas.
-
-La única excepción es:
-
-Limpieza
-
-que es un solicitante especial/grupo.
-
-19. FLUJO COMPLETO
-
-El flujo final debe ser:
-
-Usuario toca "Tomar"
-        ↓
-Modal "¿Quién solicita la llave?"
-        ↓
-┌─────────────────────────────┐
-│ Buscar persona...           │
-│                             │
-│ Juan Pérez                  │
-│ María González              │
-│                             │
-│ ─────────────────────────── │
-│                             │
-│ 🧹 Limpieza                 │
-└─────────────────────────────┘
-        ↓
-Seleccionar
-        ↓
-Confirmar
-        ↓
-KeyAssignment
-        ↓
-PostgreSQL
-20. EJEMPLO: PERSONA
-Llave:
-Sala Mezquite
-
-
-Solicitante:
-Juan Pérez
-
-
-KeyAssignment:
-
-
-key_id = Sala Mezquite
-visit_host_id = <ID de Juan Pérez>
-requester_type = PERSON
-taken_at = ahora
-returned_at = NULL
-21. EJEMPLO: LIMPIEZA
-Llave:
-Sala Agave
-
-
-Solicitante:
-Limpieza
-
-
-KeyAssignment:
-
-
-key_id = Sala Agave
-visit_host_id = NULL
-requester_type = CLEANING
-taken_at = ahora
-returned_at = NULL
-22. VALIDACIONES
-
-Antes de permitir tomar una llave:
-
-Persona
-
-Debe verificarse server-side que:
-
-VisitHost existe
-AND
-VisitHost.active = true
-Limpieza
-
-Debe verificarse:
-
-requester_type = CLEANING
-
-y permitir la operación.
-
-No confiar únicamente en la información enviada desde el cliente.
-
-23. AUDITORÍA
-
-Las operaciones:
-
-TAKE_KEY
-RETURN_KEY
-
-deben continuar generando AuditLog.
-
-El log debe poder identificar:
-
-Quién realizó la operación en el sistema
-
-y:
-
-Quién solicitó/tomó la llave
-
-Son conceptos diferentes.
-
-Por ejemplo:
-
-Administrador operativo:
-José Hernández
-
-
-Solicitante:
-Limpieza
-
-
-Llave:
-Sala Agave
-
-No mezclar estos dos datos.
-
-24. README
-
-Actualiza README.md explicando:
-
-Quién puede solicitar llaves.
-Que los solicitantes provienen de VisitHost.
-Que existe el solicitante especial Limpieza.
-Que no se almacenan nombres individuales de limpieza.
-Cómo funciona el selector.
-Cómo se almacenan los KeyAssignment.
-Cómo funciona el historial.
-CRITERIO DE ÉXITO
-
-Debe funcionar exactamente así:
-
-Persona autorizada
-Tomar llave
-     ↓
-Buscar "Juan"
-     ↓
-Juan Pérez
-     ↓
-Seleccionar
-     ↓
-Confirmar
-     ↓
-Llave asignada a Juan Pérez
-Limpieza
-Tomar llave
-     ↓
-Abrir selector
-     ↓
-Seleccionar "Limpieza"
-     ↓
-Confirmar
-     ↓
-Llave asignada a Limpieza
-Persona NO autorizada
-
-Si una persona existe en Person pero NO existe en VisitHost:
-
-NO debe aparecer
-
-y no debe poder solicitar una llave.
-
-Persona VisitHost desactivada
-VisitHost.active = false
-
-Debe:
-
-NO aparecer para nuevas solicitudes
-
-pero conservar:
-
-historial de llaves
-Limpieza
-
-Debe:
-
-aparecer siempre
-
-sin necesidad de crear una persona individual.
-
-La fuente de personas reales debe ser VisitHost, y la única opción adicional debe ser Limpieza.
-
-
+No sacrificar el historial real en la base de datos por simplificar la interfaz.

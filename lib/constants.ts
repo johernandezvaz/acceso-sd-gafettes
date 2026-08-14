@@ -12,6 +12,7 @@ export const COLORS = {
   medical: "#0e7490",
   cleaning: "#4338ca",
   security: "#7c3aed",
+  transporter: "#d97706",
 } as const;
 
 export const ROUTES = {
@@ -20,6 +21,7 @@ export const ROUTES = {
   salida: "/salida",
   llaves: "/llaves",
   sinGafete: "/sin-gafete",
+  transportistas: "/transportistas",
   practicantes: "/practicantes",
   personalMedico: "/personal/medico",
   limpieza: "/personal/limpieza",
@@ -28,6 +30,7 @@ export const ROUTES = {
   adminChangePassword: "/admin/change-password",
   adminDashboard:      "/admin/dashboard",
   adminPersonal:       "/admin/personal",
+  adminTransportistas: "/admin/transportistas",
   adminVisitHosts:     "/admin/personas-a-visitar",
   adminLlaves:         "/admin/llaves",
   adminRegistroLlaves: "/admin/llaves/registro",

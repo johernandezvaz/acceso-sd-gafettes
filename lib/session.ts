@@ -7,12 +7,12 @@ import { ROUTES } from '@/lib/constants'
 export type AdminRole = 'ADMIN' | 'SUPERADMIN'
 
 export interface SessionData {
-  adminId:           string
-  name:              string
-  email:             string
-  role:              AdminRole
+  adminId: string
+  name: string
+  email: string
+  role: AdminRole
   mustChangePassword: boolean
-  isLoggedIn:        boolean
+  isLoggedIn: boolean
 }
 
 const sessionOptions = {
@@ -31,26 +31,23 @@ export async function getSession() {
   return getIronSession<SessionData>(cookieStore, sessionOptions)
 }
 
-/** Redirige a login si no autenticado. Redirige a change-password si mustChangePassword. */
 export async function requireAuth(): Promise<SessionData> {
   const session = await getSession()
-  if (!session.isLoggedIn)          redirect(ROUTES.adminLogin)
-  if (session.mustChangePassword)   redirect(ROUTES.adminChangePassword)
+  if (!session.isLoggedIn) redirect(ROUTES.adminLogin)
+  if (session.mustChangePassword) redirect(ROUTES.adminChangePassword)
   return session
 }
 
-/** Solo autenticado — sin restricción por mustChangePassword (para la propia pantalla de cambio). */
 export async function requireLoggedIn(): Promise<SessionData> {
   const session = await getSession()
   if (!session.isLoggedIn) redirect(ROUTES.adminLogin)
   return session
 }
 
-/** SUPERADMIN + mustChangePassword = false. */
 export async function requireSuperAdmin(): Promise<SessionData> {
   const session = await getSession()
-  if (!session.isLoggedIn)          redirect(ROUTES.adminLogin)
-  if (session.mustChangePassword)   redirect(ROUTES.adminChangePassword)
+  if (!session.isLoggedIn) redirect(ROUTES.adminLogin)
+  if (session.mustChangePassword) redirect(ROUTES.adminChangePassword)
   if (session.role !== 'SUPERADMIN') redirect(ROUTES.adminDashboard)
   return session
 }
@@ -63,12 +60,12 @@ export async function createAdminSession(
   mustChangePassword: boolean
 ) {
   const session = await getSession()
-  session.adminId            = adminId
-  session.name               = name
-  session.email              = email
-  session.role               = role
+  session.adminId = adminId
+  session.name = name
+  session.email = email
+  session.role = role
   session.mustChangePassword = mustChangePassword
-  session.isLoggedIn         = true
+  session.isLoggedIn = true
   await session.save()
 }
 

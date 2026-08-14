@@ -8,58 +8,45 @@ import {
   updatePerson,
   type PersonTypeOption,
 } from '@/app/actions/people'
-import { Plus, Search, ChevronDown, X, Check, AlertCircle, Pencil, Clock, CreditCard } from 'lucide-react'
+import { Plus, Search, X, Check, AlertCircle, Pencil, Truck, Clock, CreditCard } from 'lucide-react'
 
-type Person = Awaited<ReturnType<typeof listPeople>>[number]
+type Transportista = Awaited<ReturnType<typeof listPeople>>[number]
 
-const TYPE_COLORS: Record<string, string> = {
-  practicantes: 'bg-sky-100 text-sky-700',
-  medico: 'bg-cyan-100 text-cyan-700',
-  limpieza: 'bg-indigo-100 text-indigo-700',
-  seguridad: 'bg-violet-100 text-violet-700',
-  transportistas: 'bg-orange-100 text-orange-700',
-}
-
-function getTypeColor(slug: string) {
-  return TYPE_COLORS[slug] ?? 'bg-slate-100 text-slate-600'
-}
-
-export default function AdminPersonalPage() {
-  const [people, setPeople] = useState<Person[]>([])
-  const [types, setTypes] = useState<PersonTypeOption[]>([])
+export default function AdminTransportistasPage() {
+  const [transportistas, setTransportistas] = useState<Transportista[]>([])
+  const [transportistaTypeId, setTransportistaTypeId] = useState<string>('')
   const [loading, setLoading] = useState(true)
-  const [activeTab, setActiveTab] = useState('todos')
   const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all')
   const [showModal, setShowModal] = useState(false)
-  const [editPerson, setEditPerson] = useState<Person | null>(null)
+  const [editItem, setEditItem] = useState<Transportista | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     const [p, t] = await Promise.all([
-      listPeople({ excludePersonTypeSlug: 'transportistas' }),
+      listPeople({ personTypeSlug: 'transportistas' }),
       getPersonTypes(),
     ])
-    setPeople(p)
-    // Excluir transportistas de los tipos de personal general
-    setTypes(t.filter((type) => type.slug !== 'transportistas'))
+    setTransportistas(p)
+    const tType = t.find((type) => type.slug === 'transportistas')
+    if (tType) setTransportistaTypeId(tType.id)
     setLoading(false)
   }, [])
 
   useEffect(() => { load() }, [load])
 
-  const tabs = [
-    { slug: 'todos', label: 'Todos' },
-    ...types.map((t) => ({ slug: t.slug, label: t.name })),
-  ]
-
-  const filtered = people.filter((p) => {
-    const matchTab = activeTab === 'todos' || p.personType.slug === activeTab
-    const matchSearch = search === '' || p.fullName.toLowerCase().includes(search.toLowerCase())
-    return matchTab && matchSearch
+  const filtered = transportistas.filter((p) => {
+    const matchStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'active' && p.active) ||
+      (statusFilter === 'inactive' && !p.active)
+    const matchSearch =
+      search === '' || p.fullName.toLowerCase().includes(search.toLowerCase())
+    return matchStatus && matchSearch
   })
 
-  const handleToggleActive = async (person: Person) => {
-    await updatePerson(person.id, { active: !person.active })
+  const handleToggleActive = async (item: Transportista) => {
+    await updatePerson(item.id, { active: !item.active })
     await load()
   }
 
@@ -67,62 +54,68 @@ export default function AdminPersonalPage() {
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Personal</h1>
-          <p className="text-sm text-slate-500 mt-1">{people.length} personas registradas</p>
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight flex items-center gap-2.5">
+            <Truck className="text-orange-600" size={26} />
+            Transportistas
+          </h1>
+          <p className="text-sm text-slate-500 mt-1">
+            {transportistas.length} transportista{transportistas.length !== 1 ? 's' : ''} registrado{transportistas.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <button
-          onClick={() => { setEditPerson(null); setShowModal(true) }}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 text-white text-sm font-semibold rounded-xl hover:bg-blue-800 active:bg-blue-900 transition-colors"
+          onClick={() => { setEditItem(null); setShowModal(true) }}
+          className="flex items-center gap-2 px-4 py-2.5 bg-orange-600 text-white text-sm font-semibold rounded-xl hover:bg-orange-700 active:bg-orange-800 transition-colors shadow-sm"
         >
           <Plus size={16} />
-          Agregar persona
+          Nuevo transportista
         </button>
       </div>
 
-      <div className="flex gap-1 mb-4 bg-white border border-slate-200 rounded-xl p-1.5 overflow-x-auto">
-        {tabs.map((tab) => (
-          <button
-            key={tab.slug}
-            onClick={() => setActiveTab(tab.slug)}
-            className={`
-              px-4 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-colors
-              ${activeTab === tab.slug
-                ? 'bg-blue-700 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-slate-50'}
-            `}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <div className="flex flex-col sm:flex-row gap-3 mb-4">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Buscar transportista por nombre..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full h-10 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-colors"
+          />
+        </div>
 
-      <div className="relative mb-4">
-        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-        <input
-          type="text"
-          placeholder="Buscar por nombre..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full h-10 pl-10 pr-4 rounded-xl border border-slate-200 bg-white text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors"
-        />
+        <div className="flex gap-1 bg-white border border-slate-200 rounded-xl p-1">
+          {[
+            { v: 'all', l: 'Todos' },
+            { v: 'active', l: 'Activos' },
+            { v: 'inactive', l: 'Inactivos' },
+          ].map(({ v, l }) => (
+            <button
+              key={v}
+              onClick={() => setStatusFilter(v as 'all' | 'active' | 'inactive')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${statusFilter === v ? 'bg-orange-600 text-white' : 'text-slate-600 hover:bg-slate-50'
+                }`}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         {loading ? (
           <div className="py-16 text-center">
-            <span className="inline-block w-6 h-6 border-2 border-blue-200 border-t-blue-700 rounded-full animate-spin" />
+            <span className="inline-block w-6 h-6 border-2 border-orange-200 border-t-orange-600 rounded-full animate-spin" />
           </div>
         ) : filtered.length === 0 ? (
           <div className="py-16 text-center">
-            <p className="text-slate-400 text-sm">No hay personas que coincidan</p>
+            <p className="text-slate-400 text-sm">No se encontraron transportistas</p>
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Nombre</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Tipo</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Horario</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Horario habitual</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Pago</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Estado</th>
                 <th className="px-6 py-3" />
@@ -131,15 +124,17 @@ export default function AdminPersonalPage() {
             <tbody className="divide-y divide-slate-50">
               {filtered.map((p) => (
                 <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-3.5 font-medium text-slate-900">{p.fullName}</td>
-                  <td className="px-6 py-3.5">
-                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${getTypeColor(p.personType.slug)}`}>
-                      {p.personType.name}
-                    </span>
+                  <td className="px-6 py-3.5 font-medium text-slate-900">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-lg bg-orange-100 text-orange-700 flex items-center justify-center font-bold text-xs">
+                        {p.fullName.charAt(0).toUpperCase()}
+                      </div>
+                      <span>{p.fullName}</span>
+                    </div>
                   </td>
                   <td className="px-6 py-3.5 text-slate-600 text-xs">
                     {p.scheduleEntry && p.scheduleExit ? (
-                      <span className="inline-flex items-center gap-1 font-mono font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                      <span className="inline-flex items-center gap-1 font-mono font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md">
                         <Clock size={12} className="text-slate-400" />
                         {p.scheduleEntry} - {p.scheduleExit}
                       </span>
@@ -149,7 +144,7 @@ export default function AdminPersonalPage() {
                   </td>
                   <td className="px-6 py-3.5 text-slate-600 text-xs">
                     {p.paymentFrequency ? (
-                      <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                      <span className="inline-flex items-center gap-1.5 font-medium text-slate-700">
                         <CreditCard size={12} className="text-slate-400" />
                         {p.paymentFrequency === 'SEMANAL' ? 'Semanal' : 'Quincenal'}
                       </span>
@@ -166,8 +161,8 @@ export default function AdminPersonalPage() {
                   <td className="px-6 py-3.5 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button
-                        onClick={() => { setEditPerson(p); setShowModal(true) }}
-                        className="p-1.5 text-slate-400 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-colors"
+                        onClick={() => { setEditItem(p); setShowModal(true) }}
+                        className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                         title="Editar"
                       >
                         <Pencil size={14} />
@@ -191,9 +186,9 @@ export default function AdminPersonalPage() {
       </div>
 
       {showModal && (
-        <PersonModal
-          types={types}
-          person={editPerson}
+        <TransportistaModal
+          personTypeId={transportistaTypeId}
+          person={editItem}
           onClose={() => setShowModal(false)}
           onSaved={async () => { setShowModal(false); await load() }}
         />
@@ -202,16 +197,15 @@ export default function AdminPersonalPage() {
   )
 }
 
-interface PersonModalProps {
-  types: PersonTypeOption[]
-  person: Person | null
+interface TransportistaModalProps {
+  personTypeId: string
+  person: Transportista | null
   onClose: () => void
   onSaved: () => void
 }
 
-function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
+function TransportistaModal({ personTypeId, person, onClose, onSaved }: TransportistaModalProps) {
   const [fullName, setFullName] = useState(person?.fullName ?? '')
-  const [personTypeId, setTypeId] = useState(person?.personTypeId ?? '')
   const [scheduleEntry, setScheduleEntry] = useState(person?.scheduleEntry ?? '')
   const [scheduleExit, setScheduleExit] = useState(person?.scheduleExit ?? '')
   const [paymentFrequency, setPaymentFrequency] = useState<'SEMANAL' | 'QUINCENAL'>(
@@ -222,7 +216,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
 
   const handleSubmit = async () => {
     if (!fullName.trim()) { setError('El nombre es obligatorio'); return }
-    if (!personTypeId) { setError('Selecciona el tipo de personal'); return }
+    if (!personTypeId) { setError('Error de configuración del tipo transportistas'); return }
     setSaving(true)
     setError(null)
     const payload = {
@@ -249,8 +243,9 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm overflow-y-auto">
       <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl overflow-hidden my-8">
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
-          <h2 className="text-lg font-bold text-slate-900">
-            {person ? 'Editar persona' : 'Agregar persona'}
+          <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <Truck size={20} className="text-orange-600" />
+            {person ? 'Editar transportista' : 'Nuevo transportista'}
           </h2>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg transition-colors">
             <X size={18} />
@@ -266,34 +261,15 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
               type="text"
               value={fullName}
               onChange={(e) => { setFullName(e.target.value); setError(null) }}
-              placeholder="Nombre y apellidos"
-              className="w-full h-11 px-4 rounded-xl border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors text-sm"
+              placeholder="Nombre y apellidos del transportista"
+              className="w-full h-11 px-4 rounded-xl border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-colors text-sm"
             />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-1.5">
-              Tipo de personal <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <select
-                value={personTypeId}
-                onChange={(e) => { setTypeId(e.target.value); setError(null) }}
-                className="w-full h-11 pl-4 pr-10 rounded-xl border-2 border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-colors text-sm appearance-none"
-              >
-                <option value="">Seleccionar tipo...</option>
-                {types.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
           </div>
 
           {/* Horario */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
             <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock size={13} className="text-blue-600" />
+              <Clock size={13} className="text-orange-600" />
               Horario habitual
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -303,7 +279,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
                   type="time"
                   value={scheduleEntry}
                   onChange={(e) => { setScheduleEntry(e.target.value); setError(null) }}
-                  className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm"
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-sm"
                 />
               </div>
               <div>
@@ -312,7 +288,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
                   type="time"
                   value={scheduleExit}
                   onChange={(e) => { setScheduleExit(e.target.value); setError(null) }}
-                  className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-sm"
+                  className="w-full h-10 px-3 rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 text-sm"
                 />
               </div>
             </div>
@@ -329,7 +305,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
                 className={`
                   flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all
                   ${paymentFrequency === 'SEMANAL'
-                    ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold'
+                    ? 'border-orange-600 bg-orange-50/50 text-orange-900 font-semibold'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/60 font-medium'}
                 `}
               >
@@ -339,7 +315,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
                   value="SEMANAL"
                   checked={paymentFrequency === 'SEMANAL'}
                   onChange={() => setPaymentFrequency('SEMANAL')}
-                  className="text-blue-600 focus:ring-blue-500"
+                  className="text-orange-600 focus:ring-orange-500"
                 />
                 <span className="text-sm">Semanal</span>
               </label>
@@ -348,7 +324,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
                 className={`
                   flex items-center gap-2.5 p-3 rounded-xl border cursor-pointer transition-all
                   ${paymentFrequency === 'QUINCENAL'
-                    ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold'
+                    ? 'border-orange-600 bg-orange-50/50 text-orange-900 font-semibold'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/60 font-medium'}
                 `}
               >
@@ -358,7 +334,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
                   value="QUINCENAL"
                   checked={paymentFrequency === 'QUINCENAL'}
                   onChange={() => setPaymentFrequency('QUINCENAL')}
-                  className="text-blue-600 focus:ring-blue-500"
+                  className="text-orange-600 focus:ring-orange-500"
                 />
                 <span className="text-sm">Quincenal</span>
               </label>
@@ -375,14 +351,14 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
           <button
             onClick={handleSubmit}
             disabled={saving}
-            className="w-full h-11 mt-1 bg-blue-700 text-white text-sm font-semibold rounded-xl hover:bg-blue-800 active:bg-blue-900 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
+            className="w-full h-11 mt-1 bg-orange-600 text-white text-sm font-semibold rounded-xl hover:bg-orange-700 active:bg-orange-800 disabled:opacity-60 transition-colors flex items-center justify-center gap-2"
           >
             {saving ? (
               <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : (
               <>
                 <Check size={16} />
-                {person ? 'Guardar cambios' : 'Agregar persona'}
+                {person ? 'Guardar cambios' : 'Crear transportista'}
               </>
             )}
           </button>
@@ -391,4 +367,3 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
     </div>
   )
 }
-

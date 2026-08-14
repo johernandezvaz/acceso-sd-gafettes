@@ -8,6 +8,7 @@ import {
   UserPlus,
   LogOut,
   KeyRound,
+  Truck,
   BadgeX,
   GraduationCap,
   Stethoscope,
@@ -59,18 +60,36 @@ export default function SeguridadPage() {
           </div>
         </header>
         <main className="flex-1 flex flex-col gap-5 px-6 py-5 overflow-hidden">
-          <section>
-            <PrimaryButton href={ROUTES.nuevoVisitante} icon={<UserPlus size={28} />} label="Registrar nuevo visitante" description="Captura datos, foto y gafete del visitante" />
+          <section className="grid grid-cols-2 gap-4">
+            <div className="flex items-center gap-4 w-full min-h-[88px] px-5 py-4 bg-blue-700 text-white rounded-2xl">
+              <span className="w-12 h-12 flex items-center justify-center bg-white/20 rounded-xl text-white text-2xl">
+                <UserPlus size={26} />
+              </span>
+              <span className="flex-1 text-left">
+                <span className="block text-lg font-bold leading-tight">Registrar nuevo visitante</span>
+                <span className="block text-xs text-blue-100 mt-0.5">Captura de datos y gafete</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-4 w-full min-h-[88px] px-5 py-4 bg-emerald-700 text-white rounded-2xl">
+              <span className="w-12 h-12 flex items-center justify-center bg-white/20 rounded-xl text-white text-2xl">
+                <LogOut size={26} />
+              </span>
+              <span className="flex-1 text-left">
+                <span className="block text-lg font-bold leading-tight">Registrar salida</span>
+                <span className="block text-xs text-emerald-100 mt-0.5">Cerrar visita activa</span>
+              </span>
+            </div>
           </section>
+
           <section>
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Acciones rápidas</h2>
-            <div className="grid grid-cols-2 gap-3">
-              <SecondaryButton href={ROUTES.salida} icon={<LogOut size={22} />} label="Registrar salida" description="Cerrar visita activa" iconBg="bg-green-100" iconColor="text-green-700" />
+            <div className="grid grid-cols-3 gap-3">
               <SecondaryButton href={ROUTES.llaves} icon={<KeyRound size={22} />} label="Llaves" description="Control de llaves" iconBg="bg-amber-100" iconColor="text-amber-700" />
-              <SecondaryButton href={ROUTES.sinGafete} icon={<BadgeX size={22} />} label="Sin gafete" description="Acceso sin identificación" iconBg="bg-red-100" iconColor="text-red-700" />
+              <SecondaryButton href={ROUTES.transportistas} icon={<Truck size={22} />} label="Transportistas" description="Registro de transporte" iconBg="bg-orange-100" iconColor="text-orange-700" />
               <SecondaryButton href={ROUTES.practicantes} icon={<GraduationCap size={22} />} label="Practicantes" description="Registro de pasantes" iconBg="bg-sky-100" iconColor="text-sky-700" />
             </div>
           </section>
+
           <section>
             <h2 className="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-3">Personal interno</h2>
             <div className="grid grid-cols-3 gap-3">

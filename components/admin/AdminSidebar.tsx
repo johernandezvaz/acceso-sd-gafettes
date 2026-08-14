@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
+  Truck,
   Building2,
   KeyRound,
   History,
@@ -24,6 +25,7 @@ interface AdminSidebarProps {
 const baseNavItems = [
   { label: 'Dashboard', href: ROUTES.adminDashboard, icon: LayoutDashboard },
   { label: 'Personal', href: ROUTES.adminPersonal, icon: Users },
+  { label: 'Transportistas', href: ROUTES.adminTransportistas, icon: Truck },
   { label: 'Personas a visitar', href: ROUTES.adminVisitHosts, icon: Building2 },
   { label: 'Llaves', href: ROUTES.adminLlaves, icon: KeyRound, exact: true },
   { label: 'Registro de llaves', href: ROUTES.adminRegistroLlaves, icon: History },
