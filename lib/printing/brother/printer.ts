@@ -46,6 +46,15 @@ export function printViaBrowserDialog(): Promise<BrotherPrintResult> {
   });
 }
 
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const CHUNK_SIZE = 0x8000;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK_SIZE));
+  }
+  return btoa(binary);
+}
+
 export async function sendToBrotherNetworkPrinter(
   data: VisitorBadgeData,
   printerIp: string,
@@ -54,7 +63,7 @@ export async function sendToBrotherNetworkPrinter(
 ): Promise<BrotherPrintResult> {
   try {
     const binaryJob = generateBrotherRasterJob(data, options);
-    const base64Data = btoa(String.fromCharCode(...binaryJob));
+    const base64Data = uint8ArrayToBase64(binaryJob);
 
     const response = await fetch('/api/print/brother', {
       method: 'POST',

@@ -9,9 +9,9 @@ export interface VisitorBadgeData {
 }
 
 export interface BrotherPrintOptions {
-
   dpi?: number;
   mediaWidthMm?: number;
+  heightMm?: number;
   autoCut?: boolean;
 }
 
@@ -40,13 +40,16 @@ export const IDENTIFICACIONES_MAP: Record<string, string> = {
   gafete_empresa: 'Gafete de empresa',
 };
 
-export function calculateBrotherDimensions(dpi = BROTHER_DEFAULT_DPI) {
+export function calculateBrotherDimensions(
+  dpi: number = BROTHER_DEFAULT_DPI,
+  heightMm: number = BADGE_PHYSICAL_DIMENSIONS.heightMm
+) {
   const widthDots = Math.round((BADGE_PHYSICAL_DIMENSIONS.widthMm / 25.4) * dpi);
-  const heightDots = Math.round((BADGE_PHYSICAL_DIMENSIONS.heightMm / 25.4) * dpi);
+  const heightDots = Math.round((heightMm / 25.4) * dpi);
 
   return {
     widthMm: BADGE_PHYSICAL_DIMENSIONS.widthMm,
-    heightMm: BADGE_PHYSICAL_DIMENSIONS.heightMm,
+    heightMm,
     dpi,
     widthDots,
     heightDots,
@@ -85,14 +88,24 @@ export function generateBrotherRasterJob(
   options: BrotherPrintOptions = {},
   customBitmapBuffer?: Uint8Array
 ): Uint8Array {
-  const dims = calculateBrotherDimensions(options.dpi ?? BROTHER_DEFAULT_DPI);
+  const dims = calculateBrotherDimensions(
+    options.dpi ?? BROTHER_DEFAULT_DPI,
+    options.heightMm ?? BADGE_PHYSICAL_DIMENSIONS.heightMm
+  );
   const mediaWidth = options.mediaWidthMm ?? 62;
   const autoCut = options.autoCut ?? true;
+
+  if (mediaWidth > 62) {
+    throw new Error(
+      `mediaWidthMm=${mediaWidth} excede el máximo físico de la QL-810W (62mm).`
+    );
+  }
 
   const PIN_COUNT = 720;
   const BYTES_PER_LINE = PIN_COUNT / 8;
   const totalLines = dims.heightDots;
   const leftOffsetDots = Math.max(0, Math.floor((PIN_COUNT - dims.widthDots) / 2));
+
 
   const chunks: Uint8Array[] = [];
 
@@ -105,7 +118,7 @@ export function generateBrotherRasterJob(
   mediaInfo[1] = 0x69;
   mediaInfo[2] = 0x7A;
   mediaInfo[3] = 0x86;
-  mediaInfo[4] = 0x0A;
+  mediaInfo[4] = 0x0B;
   mediaInfo[5] = mediaWidth;
   mediaInfo[6] = 0;
   mediaInfo[7] = totalLines & 0xFF;
@@ -166,3 +179,40 @@ export function generateBrotherRasterJob(
 
   return result;
 }
+
+/**
+ * Rota 90° en sentido horario un bitmap empaquetado 1bpp (MSB primero).
+ * Úsalo así: renderiza tu diseño en un canvas "landscape" de
+ * heightDots × widthDots (84.5mm × 53mm), empácalo a 1bpp, y pasa
+ * ese buffer aquí para obtener un buffer válido para generateBrotherRasterJob
+ * (widthDots × heightDots, portrait), sin cambiar cómo se alimenta el medio.
+ */
+export function rotateBitmap90CW(
+  srcBuffer: Uint8Array,
+  srcWidthDots: number,
+  srcHeightDots: number
+): { buffer: Uint8Array; widthDots: number; heightDots: number } {
+  const srcRowBytes = Math.ceil(srcWidthDots / 8);
+  const dstWidthDots = srcHeightDots;
+  const dstHeightDots = srcWidthDots;
+  const dstRowBytes = Math.ceil(dstWidthDots / 8);
+  const dstBuffer = new Uint8Array(dstRowBytes * dstHeightDots);
+
+  const getPixel = (x: number, y: number) =>
+    (srcBuffer[y * srcRowBytes + (x >> 3)] & (1 << (7 - (x % 8)))) !== 0;
+
+  const setPixel = (x: number, y: number) => {
+    dstBuffer[y * dstRowBytes + (x >> 3)] |= 1 << (7 - (x % 8));
+  };
+
+  for (let sy = 0; sy < srcHeightDots; sy++) {
+    for (let sx = 0; sx < srcWidthDots; sx++) {
+      if (getPixel(sx, sy)) {
+        setPixel(srcHeightDots - 1 - sy, sx);
+      }
+    }
+  }
+
+  return { buffer: dstBuffer, widthDots: dstWidthDots, heightDots: dstHeightDots };
+}
+
