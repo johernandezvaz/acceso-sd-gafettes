@@ -36,14 +36,16 @@ export default function GafeteVisitante({
     fecha: fechaIso,
   });
 
+  const W = 256;
+  const H = 408;
+
   return (
     <div id="gafete-print" className={className}>
-
       <div
         className="badge-inner"
         style={{
-          width: '256px',
-          height: '408px',
+          width: `${W}px`,
+          height: `${H}px`,
           backgroundColor: '#FFFFFF',
           border: '1.5px solid #000000',
           borderRadius: '4px',
@@ -52,30 +54,28 @@ export default function GafeteVisitante({
           color: '#000000',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'space-between',
-          position: 'relative',
           boxSizing: 'border-box',
         }}
       >
 
-        <div style={{ height: '4px', backgroundColor: '#000000', width: '100%', flexShrink: 0 }} />
+        <div style={{ height: '4px', backgroundColor: '#000000', flexShrink: 0 }} />
 
         <div
           style={{
-            padding: '6px 10px',
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
+            padding: '6px 10px 5px',
             backgroundColor: '#FFFFFF',
             flexShrink: 0,
           }}
         >
-          <div style={{ position: 'relative', width: '56px', height: '26px' }}>
+          <div style={{ position: 'relative', width: '60px', height: '24px' }}>
             <Image
               src="/safe-demo_logo-blc-Photoroom.png"
               alt="Safe Demo Logo"
               fill
-              sizes="56px"
+              sizes="60px"
               style={{ objectFit: 'contain', filter: 'grayscale(100%) contrast(200%)' }}
               priority
             />
@@ -85,9 +85,9 @@ export default function GafeteVisitante({
             style={{
               backgroundColor: '#000000',
               color: '#FFFFFF',
-              fontSize: '9.5px',
+              fontSize: '8px',
               fontWeight: '900',
-              letterSpacing: '0.12em',
+              letterSpacing: '0.14em',
               textTransform: 'uppercase',
               padding: '3px 7px',
               borderRadius: '2px',
@@ -98,87 +98,176 @@ export default function GafeteVisitante({
           </div>
         </div>
 
-        <div style={{ height: '1px', backgroundColor: '#000000', width: '100%', flexShrink: 0 }} />
+        <div style={{ height: '1px', backgroundColor: '#000000', flexShrink: 0 }} />
 
         <div
           style={{
-            padding: '8px 10px',
             display: 'flex',
-            flexDirection: 'column',
-            gap: '3px',
+            flexDirection: 'row',
+            gap: '8px',
+            padding: '8px 10px',
             backgroundColor: '#FFFFFF',
+            alignItems: 'flex-start',
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              border: '1px solid #000000',
+              borderRadius: '2px',
+              padding: '2px',
+              backgroundColor: '#FFFFFF',
+              flexShrink: 0,
+            }}
+          >
+            <QRCodeSVG
+              value={qrData}
+              size={72}
+              level="M"
+              fgColor="#000000"
+              bgColor="#FFFFFF"
+              style={{ display: 'block' }}
+            />
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '3px',
+              flex: 1,
+              minWidth: 0,
+            }}
+          >
+            <span
+              style={{
+                fontSize: '12.5px',
+                fontWeight: '900',
+                lineHeight: '1.15',
+                textTransform: 'uppercase',
+                color: '#000000',
+                wordBreak: 'break-word',
+              }}
+            >
+              {nombre}
+            </span>
+
+            <span
+              style={{
+                fontSize: '9.5px',
+                fontWeight: '600',
+                color: '#000000',
+                wordBreak: 'break-word',
+                lineHeight: '1.2',
+              }}
+            >
+              {empresa}
+            </span>
+
+            <div
+              style={{
+                marginTop: '5px',
+                paddingTop: '4px',
+                borderTop: '1px solid #000000',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: '7px',
+                  fontWeight: '900',
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                  color: '#000000',
+                  display: 'block',
+                  lineHeight: 1,
+                }}
+              >
+                FOLIO
+              </span>
+              <span
+                style={{
+                  fontSize: '11px',
+                  fontWeight: '900',
+                  letterSpacing: '0.08em',
+                  color: '#000000',
+                  lineHeight: '1.3',
+                }}
+              >
+                #{folio}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ height: '1px', backgroundColor: '#000000', flexShrink: 0 }} />
+
+        <div
+          style={{
+            padding: '5px 10px',
+            backgroundColor: '#000000',
             flexShrink: 0,
           }}
         >
           <span
             style={{
-              fontSize: '13px',
+              fontSize: '7px',
               fontWeight: '900',
-              lineHeight: '1.2',
+              letterSpacing: '0.12em',
               textTransform: 'uppercase',
-              color: '#000000',
-              wordBreak: 'break-word',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
+              color: '#FFFFFF',
+              lineHeight: 1,
+              display: 'block',
             }}
           >
-            {nombre}
+            VISITA A
           </span>
           <span
             style={{
-              fontSize: '10px',
-              color: '#000000',
-              fontWeight: '600',
+              fontSize: '9.5px',
+              fontWeight: '700',
+              color: '#FFFFFF',
+              lineHeight: '1.25',
+              display: 'block',
+              marginTop: '1px',
               wordBreak: 'break-word',
-              display: '-webkit-box',
-              WebkitLineClamp: 1,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
             }}
           >
-            {empresa}
-          </span>
-          <span
-            style={{
-              fontSize: '10.5px',
-              fontWeight: '900',
-              letterSpacing: '0.05em',
-              color: '#000000',
-              marginTop: '2px',
-            }}
-          >
-            FOLIO #{folio}
+            {visitaA || '—'}
           </span>
         </div>
 
-        <div style={{ height: '1px', backgroundColor: '#000000', width: '100%', flexShrink: 0 }} />
+        <div style={{ height: '1px', backgroundColor: '#000000', flexShrink: 0 }} />
 
         <div
           style={{
-            padding: '8px 10px',
             display: 'flex',
-            flexDirection: 'column',
-            gap: '6px',
+            flexDirection: 'row',
             backgroundColor: '#FFFFFF',
-            flex: 1,
-            justifyContent: 'center',
+            flexShrink: 0,
           }}
         >
           {[
-            { label: 'VISITA A', value: visitaA || '—' },
             { label: 'MOTIVO', value: motivoLabel },
             { label: 'IDENTIFICACIÓN', value: idLabel },
-          ].map(({ label, value }) => (
-            <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+          ].map(({ label, value }, i) => (
+            <div
+              key={label}
+              style={{
+                flex: 1,
+                padding: '5px 10px',
+                borderRight: i === 0 ? '1px solid #000000' : 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1px',
+              }}
+            >
               <span
                 style={{
-                  color: '#000000',
-                  fontSize: '8px',
+                  fontSize: '7px',
                   fontWeight: '900',
-                  letterSpacing: '0.06em',
+                  letterSpacing: '0.1em',
                   textTransform: 'uppercase',
+                  color: '#000000',
                   lineHeight: 1,
                 }}
               >
@@ -186,15 +275,11 @@ export default function GafeteVisitante({
               </span>
               <span
                 style={{
-                  fontSize: '10px',
+                  fontSize: '8.5px',
                   fontWeight: '700',
                   color: '#000000',
+                  lineHeight: '1.25',
                   wordBreak: 'break-word',
-                  lineHeight: '1.2',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 1,
-                  WebkitBoxOrient: 'vertical',
-                  overflow: 'hidden',
                 }}
               >
                 {value}
@@ -203,62 +288,45 @@ export default function GafeteVisitante({
           ))}
         </div>
 
-        <div style={{ height: '1px', backgroundColor: '#000000', width: '100%', flexShrink: 0 }} />
+        <div style={{ height: '1px', backgroundColor: '#000000', flexShrink: 0 }} />
 
         <div
           style={{
-            padding: '8px 10px',
             display: 'flex',
+            flexDirection: 'row',
             justifyContent: 'space-between',
             alignItems: 'center',
+            padding: '5px 10px',
             backgroundColor: '#FFFFFF',
             flexShrink: 0,
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span
-              style={{
-                fontSize: '9.5px',
-                color: '#000000',
-                fontWeight: '800',
-                letterSpacing: '0.02em',
-                lineHeight: 1.2,
-              }}
-            >
-              {dateInfo.fecha}
-            </span>
-            <span
-              style={{
-                fontSize: '11px',
-                color: '#000000',
-                fontWeight: '900',
-                letterSpacing: '0.03em',
-                lineHeight: 1.2,
-              }}
-            >
-              {dateInfo.hora}
-            </span>
-          </div>
-
-          <div
+          <span
             style={{
-              padding: '2px',
-              backgroundColor: '#FFFFFF',
-              border: '1px solid #000000',
-              borderRadius: '2px',
-              flexShrink: 0,
+              fontSize: '9px',
+              fontWeight: '700',
+              color: '#000000',
+              letterSpacing: '0.04em',
+              lineHeight: 1,
             }}
           >
-            <QRCodeSVG
-              value={qrData}
-              size={48}
-              level="M"
-              fgColor="#000000"
-              bgColor="#FFFFFF"
-              style={{ display: 'block' }}
-            />
-          </div>
+            {dateInfo.fecha}
+          </span>
+          <span
+            style={{
+              fontSize: '9px',
+              fontWeight: '900',
+              color: '#000000',
+              letterSpacing: '0.06em',
+              lineHeight: 1,
+            }}
+          >
+            {dateInfo.hora}
+          </span>
         </div>
+
+        <div style={{ height: '4px', backgroundColor: '#000000', flexShrink: 0, marginTop: 'auto' }} />
+
       </div>
     </div>
   );
