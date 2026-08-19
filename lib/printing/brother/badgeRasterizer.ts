@@ -110,9 +110,8 @@ export async function renderVisitorBadgeTo1bpp(
   ctx.lineWidth = 4;
   ctx.strokeStyle = '#000000';
   ctx.strokeRect(2, 2, widthDots - 4, heightDots - 4);
-
   ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 0, widthDots, 10);
+  ctx.fillRect(0, 0, widthDots, 8);
 
   try {
     const logoImg = new Image();
@@ -124,46 +123,41 @@ export async function renderVisitorBadgeTo1bpp(
     });
 
     if (logoImg.complete && logoImg.naturalWidth > 0) {
-      ctx.drawImage(logoImg, 20, 16, 130, 44);
+      ctx.drawImage(logoImg, 20, 12, 120, 38);
     } else {
       ctx.fillStyle = '#000000';
-      ctx.font = '900 24px system-ui, sans-serif';
-      ctx.fillText('SAFE DEMO', 20, 48);
+      ctx.font = '900 22px system-ui, sans-serif';
+      ctx.fillText('SAFE DEMO', 20, 42);
     }
   } catch {
     ctx.fillStyle = '#000000';
-    ctx.font = '900 24px system-ui, sans-serif';
-    ctx.fillText('SAFE DEMO', 20, 48);
+    ctx.font = '900 22px system-ui, sans-serif';
+    ctx.fillText('SAFE DEMO', 20, 42);
   }
 
-  // Badge VISITANTE
-  const badgeWidth = 145;
-  const badgeHeight = 36;
+  const badgeWidth = 140;
+  const badgeHeight = 32;
   const badgeX = widthDots - badgeWidth - 20;
-  const badgeY = 20;
+  const badgeY = 14;
   ctx.fillStyle = '#000000';
   ctx.fillRect(badgeX, badgeY, badgeWidth, badgeHeight);
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = '900 18px system-ui, sans-serif';
+  ctx.font = '900 17px system-ui, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('VISITANTE', badgeX + badgeWidth / 2, badgeY + 24);
+  ctx.fillText('VISITANTE', badgeX + badgeWidth / 2, badgeY + 22);
   ctx.textAlign = 'left';
 
-  // Separador header
   ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 68, widthDots, 3);
+  ctx.fillRect(0, 56, widthDots, 2);
 
-  // 5. Sección Principal: QR (izquierda) + Nombre / Empresa / Folio (derecha)
-  const qrBoxSize = 190;
+  const qrBoxSize = 175;
   const qrX = 20;
-  const qrY = 82;
+  const qrY = 66;
 
-  // Borde caja QR
   ctx.lineWidth = 2;
   ctx.strokeStyle = '#000000';
   ctx.strokeRect(qrX, qrY, qrBoxSize, qrBoxSize);
 
-  // Extraer el QR renderizado en el DOM o rasterizarlo
   try {
     const qrSvg = document.querySelector('#gafete-print svg');
     if (qrSvg) {
@@ -183,99 +177,82 @@ export async function renderVisitorBadgeTo1bpp(
     console.warn('[BadgeRasterizer] No se pudo extraer QR del DOM:', err);
   }
 
-  // Datos principales (derecha)
-  const rightX = qrX + qrBoxSize + 18;
+  const rightX = qrX + qrBoxSize + 16;
   const rightWidth = widthDots - rightX - 20;
 
-  // Nombre
   ctx.fillStyle = '#000000';
-  ctx.font = '900 26px system-ui, sans-serif';
-  const nameEndY = wrapText(ctx, (data.nombre || 'VISITANTE').toUpperCase(), rightX, qrY + 26, rightWidth, 30, 2);
+  ctx.font = '900 24px system-ui, sans-serif';
+  const nameEndY = wrapText(ctx, (data.nombre || 'VISITANTE').toUpperCase(), rightX, qrY + 24, rightWidth, 28, 2);
 
-  // Empresa
-  ctx.font = '600 20px system-ui, sans-serif';
+  ctx.font = '600 18px system-ui, sans-serif';
   ctx.fillStyle = '#000000';
-  wrapText(ctx, data.empresa || '', rightX, Math.max(nameEndY + 4, qrY + 84), rightWidth, 24, 1);
+  wrapText(ctx, data.empresa || '', rightX, Math.max(nameEndY + 4, qrY + 74), rightWidth, 22, 1);
 
-  // Línea sobre FOLIO
-  const folioLineY = qrY + 118;
+  const folioLineY = qrY + 104;
   ctx.fillStyle = '#000000';
   ctx.fillRect(rightX, folioLineY, rightWidth, 2);
+  ctx.font = '900 13px system-ui, sans-serif';
+  ctx.fillText('FOLIO', rightX, folioLineY + 18);
+  ctx.font = '900 24px system-ui, sans-serif';
+  ctx.fillText(`#${data.folio || '000000'}`, rightX, folioLineY + 46);
 
-  // Folio
-  ctx.font = '900 14px system-ui, sans-serif';
-  ctx.fillText('FOLIO', rightX, folioLineY + 20);
-  ctx.font = '900 26px system-ui, sans-serif';
-  ctx.fillText(`#${data.folio || '000000'}`, rightX, folioLineY + 50);
-
-  // Separador sección central
   ctx.fillStyle = '#000000';
-  ctx.fillRect(0, 285, widthDots, 3);
+  ctx.fillRect(0, 252, widthDots, 2);
 
-  // 6. Sección VISITA A (Banner fondo negro con texto blanco)
-  const visitaY = 288;
-  const visitaHeight = 88;
+  const visitaY = 254;
+  const visitaHeight = 78;
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, visitaY, widthDots, visitaHeight);
 
   ctx.fillStyle = '#FFFFFF';
-  ctx.font = '900 14px system-ui, sans-serif';
-  ctx.fillText('VISITA A', 20, visitaY + 24);
+  ctx.font = '900 13px system-ui, sans-serif';
+  ctx.fillText('VISITA A', 20, visitaY + 22);
 
-  ctx.font = 'bold 22px system-ui, sans-serif';
-  wrapText(ctx, data.visitaA || '—', 20, visitaY + 54, widthDots - 40, 26, 1);
+  ctx.font = 'bold 20px system-ui, sans-serif';
+  wrapText(ctx, data.visitaA || '—', 20, visitaY + 48, widthDots - 40, 24, 1);
 
-  // Separador
   ctx.fillStyle = '#000000';
-  ctx.fillRect(0, visitaY + visitaHeight, widthDots, 3);
+  ctx.fillRect(0, visitaY + visitaHeight, widthDots, 2);
 
-  // 7. Sección MOTIVO e IDENTIFICACIÓN (2 columnas)
-  const infoY = visitaY + visitaHeight + 3;
+  const infoY = visitaY + visitaHeight + 2;
   const colWidth = (widthDots - 40) / 2;
 
   const motivoLabel = MOTIVOS_MAP[data.motivo] ?? data.motivo ?? '—';
   const idLabel = IDENTIFICACIONES_MAP[data.identificacion] ?? data.identificacion ?? '—';
 
-  // Columna 1: MOTIVO
   ctx.fillStyle = '#000000';
-  ctx.font = '900 14px system-ui, sans-serif';
-  ctx.fillText('MOTIVO', 20, infoY + 24);
-  ctx.font = 'bold 19px system-ui, sans-serif';
-  wrapText(ctx, motivoLabel, 20, infoY + 50, colWidth - 10, 22, 1);
+  ctx.font = '900 13px system-ui, sans-serif';
+  ctx.fillText('MOTIVO', 20, infoY + 20);
+  ctx.font = 'bold 18px system-ui, sans-serif';
+  wrapText(ctx, motivoLabel, 20, infoY + 44, colWidth - 10, 20, 1);
 
-  // Divisor de columna
-  ctx.fillRect(20 + colWidth + 5, infoY, 2, 85);
+  ctx.fillRect(20 + colWidth + 5, infoY, 2, 74);
 
-  // Columna 2: IDENTIFICACIÓN
   const col2X = 20 + colWidth + 15;
   ctx.fillStyle = '#000000';
-  ctx.font = '900 14px system-ui, sans-serif';
-  ctx.fillText('IDENTIFICACIÓN', col2X, infoY + 24);
-  ctx.font = 'bold 19px system-ui, sans-serif';
-  wrapText(ctx, idLabel, col2X, infoY + 50, colWidth - 10, 22, 1);
+  ctx.font = '900 13px system-ui, sans-serif';
+  ctx.fillText('IDENTIFICACIÓN', col2X, infoY + 20);
+  ctx.font = 'bold 18px system-ui, sans-serif';
+  wrapText(ctx, idLabel, col2X, infoY + 44, colWidth - 10, 20, 1);
 
-  // Separador
   ctx.fillStyle = '#000000';
-  ctx.fillRect(0, infoY + 85, widthDots, 3);
+  ctx.fillRect(0, infoY + 74, widthDots, 2);
 
-  // 8. Footer: Fecha (izq) y Hora (der)
   const dateInfo = formatBadgeDate(data.fechaHora);
-  const footerY = infoY + 88;
+  const footerY = infoY + 76;
 
   ctx.fillStyle = '#000000';
-  ctx.font = 'bold 20px system-ui, sans-serif';
-  ctx.fillText(dateInfo.fecha, 20, footerY + 36);
+  ctx.font = 'bold 19px system-ui, sans-serif';
+  ctx.fillText(dateInfo.fecha, 20, footerY + 30);
 
-  ctx.font = '900 22px system-ui, sans-serif';
+  ctx.font = '900 21px system-ui, sans-serif';
   ctx.textAlign = 'right';
-  ctx.fillText(dateInfo.hora, widthDots - 20, footerY + 36);
+  ctx.fillText(dateInfo.hora, widthDots - 20, footerY + 30);
   ctx.textAlign = 'left';
 
-  // Barra negra inferior
   ctx.fillStyle = '#000000';
-  ctx.fillRect(0, heightDots - 10, widthDots, 10);
+  ctx.fillRect(0, heightDots - 8, widthDots, 8);
 
-  // 9. Extraer ImageData y convertir a 1bpp
   const imageData = ctx.getImageData(0, 0, widthDots, heightDots);
   const { buffer, blackPixelCount } = imageDataTo1bpp(imageData, widthDots, heightDots);
 

@@ -37,7 +37,7 @@ export default function GafeteVisitante({
   });
 
   const W = 256;
-  const H = 260;
+  const H = 242;
 
   return (
     <div id="gafete-print" className={className}>

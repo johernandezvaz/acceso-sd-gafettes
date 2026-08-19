@@ -17,7 +17,7 @@ export interface BrotherPrintOptions {
 
 export const BADGE_PHYSICAL_DIMENSIONS = {
   widthMm: 53.0,
-  heightMm: 54.0,
+  heightMm: 50.0,
   orientation: 'portrait',
 } as const;
 
@@ -154,7 +154,8 @@ export function generateBrotherRasterJob(
         const isPixelBlack = (customBitmapBuffer[srcByteIdx] & (1 << srcBitIdx)) !== 0;
 
         if (isPixelBlack) {
-          const targetDot = leftOffsetDots + dx;
+
+          const targetDot = leftOffsetDots + (dims.widthDots - 1 - dx);
           if (targetDot < PIN_COUNT) {
             const dstByteIdx = Math.floor(targetDot / 8);
             const dstBitIdx = 7 - (targetDot % 8);
