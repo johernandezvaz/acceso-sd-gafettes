@@ -117,8 +117,8 @@ export function generateBrotherRasterJob(
   mediaInfo[0] = 0x1B;
   mediaInfo[1] = 0x69;
   mediaInfo[2] = 0x7A;
-  mediaInfo[3] = 0x86;
-  mediaInfo[4] = 0x0B;
+  mediaInfo[3] = 0x8E;
+  mediaInfo[4] = 0x0A;
   mediaInfo[5] = mediaWidth;
   mediaInfo[6] = 0;
   mediaInfo[7] = totalLines & 0xFF;
@@ -180,13 +180,6 @@ export function generateBrotherRasterJob(
   return result;
 }
 
-/**
- * Rota 90° en sentido horario un bitmap empaquetado 1bpp (MSB primero).
- * Úsalo así: renderiza tu diseño en un canvas "landscape" de
- * heightDots × widthDots (84.5mm × 53mm), empácalo a 1bpp, y pasa
- * ese buffer aquí para obtener un buffer válido para generateBrotherRasterJob
- * (widthDots × heightDots, portrait), sin cambiar cómo se alimenta el medio.
- */
 export function rotateBitmap90CW(
   srcBuffer: Uint8Array,
   srcWidthDots: number,
