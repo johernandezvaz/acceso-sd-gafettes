@@ -11,8 +11,8 @@ function runBrotherTests() {
 
   console.log('[Test 1] Dimensiones físicas y resolución:');
   console.log('Dimensiones físicas:', BADGE_PHYSICAL_DIMENSIONS);
-  if (BADGE_PHYSICAL_DIMENSIONS.widthMm !== 53.0 || BADGE_PHYSICAL_DIMENSIONS.heightMm !== 84.5) {
-    throw new Error('Dimensiones físicas incorrectas. Deben ser 53mm ancho x 84.5mm alto.');
+  if (BADGE_PHYSICAL_DIMENSIONS.widthMm !== 53.0 || BADGE_PHYSICAL_DIMENSIONS.heightMm !== 54.0) {
+    throw new Error('Dimensiones físicas incorrectas. Deben ser 53mm ancho x 54mm alto.');
   }
   if (BADGE_PHYSICAL_DIMENSIONS.orientation !== 'portrait') {
     throw new Error('La orientación debe ser portrait (vertical).');
@@ -20,7 +20,7 @@ function runBrotherTests() {
 
   const dims = calculateBrotherDimensions(300);
   console.log('Dimensiones a 300 DPI:', dims);
-  if (dims.widthDots !== 626 || dims.heightDots !== 998) {
+  if (dims.widthDots !== 626 || dims.heightDots !== 638) {
     throw new Error(`Dots calculados incorrectos: width=${dims.widthDots}, height=${dims.heightDots}`);
   }
   console.log('✔ Test 1 superado.\n');

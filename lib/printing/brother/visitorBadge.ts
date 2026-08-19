@@ -17,7 +17,7 @@ export interface BrotherPrintOptions {
 
 export const BADGE_PHYSICAL_DIMENSIONS = {
   widthMm: 53.0,
-  heightMm: 84.5,
+  heightMm: 54.0,
   orientation: 'portrait',
 } as const;
 

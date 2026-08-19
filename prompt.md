@@ -1,422 +1,523 @@
-# Rediseño visual del gafete de visitante — orientación tipo identificación
+# Corrección definitiva — Brother QL-810W imprime blanco
 
-Necesitamos modificar ÚNICAMENTE el diseño visual del componente del gafete de visitante.
-
-NO modificar el sistema de impresión Brother, el Raster Command Stream, TCP, dimensiones del soporte, generación del bitmap ni el flujo de impresión.
-
-El objetivo es que el gafete deje de verse como un gafete vertical tradicional y tenga una apariencia más cercana a una identificación.
-
----
+Tenemos un problema confirmado en el flujo de impresión.
 
 ## Estado actual
 
-Actualmente el diseño se presenta de forma vertical:
+La Brother QL-810W:
 
-```text
-┌─────────────────────────┐
-│ LOGO          VISITANTE │
-├─────────────────────────┤
-│ NOMBRE                  │
-│ EMPRESA                 │
-│ FOLIO                   │
-├─────────────────────────┤
-│                         │
-│ VISITA A                │
-│ MOTIVO                  │
-│ IDENTIFICACIÓN          │
-│                         │
-├─────────────────────────┤
-│ FECHA              QR   │
-└─────────────────────────┘
+* recibe correctamente el trabajo;
+* tiene comunicación TCP funcionando;
+* reconoce correctamente el soporte DK-4205;
+* imprime la longitud correcta;
+* realiza el corte correctamente;
+
+PERO:
+
+**el diseño sale completamente blanco.**
+
+## Causa probable ya identificada
+
+`generateBrotherRasterJob()` recibe opcionalmente:
+
+```ts
+customBitmapBuffer?: Uint8Array
 ```
 
-El resultado actual se ve demasiado parecido a un gafete vertical.
+y el contenido negro del Raster solamente se genera cuando:
 
-Queremos que visualmente se comporte más como una identificación.
+```ts
+if (customBitmapBuffer) {
+   ...
+}
+```
+
+Actualmente `sendToBrotherNetworkPrinter()` llama:
+
+```ts
+const binaryJob = generateBrotherRasterJob(data, options);
+```
+
+sin proporcionar `customBitmapBuffer`.
+
+Por lo tanto, el Raster se está generando sin píxeles negros.
+
+Esto debe corregirse.
 
 ---
 
-# Objetivo visual
+# OBJETIVO
 
-Rotar la COMPOSICIÓN DE LA INFORMACIÓN 90° para aprovechar mejor el formato físico.
+Conectar correctamente el diseño visual del gafete con la generación del Brother Raster.
 
-IMPORTANTE:
+El flujo debe ser:
 
-No rotar físicamente la impresión mediante comandos Brother.
+```text
+GafeteVisitante
+        ↓
+Diseño visual
+        ↓
+Bitmap 1bpp
+        ↓
+customBitmapBuffer
+        ↓
+generateBrotherRasterJob()
+        ↓
+Brother Raster Command Stream
+        ↓
+TCP 10.33.31.94:9100
+        ↓
+Brother QL-810W
+```
 
-No modificar `rotateBitmap90CW()` salvo que sea estrictamente necesario.
+NO queremos simplemente enviar el componente HTML a la impresora.
 
-La modificación debe hacerse principalmente en:
+La QL-810W necesita recibir el bitmap convertido al formato Brother Raster.
+
+---
+
+# IMPORTANTE: NO modificar lo que ya funciona
+
+NO modificar:
+
+* IP 10.33.31.94
+* Puerto 9100
+* comunicación TCP
+* endpoint `/api/print/brother`
+* tipo de soporte
+* DK-4205
+* Continuous Length
+* media width = 62 mm
+* `mediaInfo[3] = 0x8E`
+* `mediaInfo[4] = 0x0A`
+* `mediaInfo[5] = 62`
+* `mediaInfo[6] = 0`
+* comando de corte que ya funciona
+* longitud física que ya funciona
+
+La impresora ya acepta el trabajo y corta correctamente.
+
+El problema ahora es exclusivamente:
+
+**el bitmap que llega al Raster está vacío/no contiene los píxeles del diseño.**
+
+---
+
+# GEOMETRÍA
+
+Recordar la diferencia:
+
+## Soporte físico
+
+```text
+62 mm de ancho
+DK-4205 continuous
+```
+
+## Diseño útil
+
+```text
+52 mm de ancho
+```
+
+## Longitud de corte
+
+```text
+54 mm
+```
+
+NO interpretar 52 × 54 mm como el tamaño del soporte.
+
+El Raster debe continuar trabajando sobre el ancho físico que requiere la QL-810W.
+
+---
+
+# TAREA 1 — Encontrar dónde se genera actualmente el bitmap
+
+Buscar en todo el proyecto:
+
+```text
+customBitmapBuffer
+```
+
+y también:
+
+```text
+canvas
+getImageData
+ImageData
+Uint8Array
+1bpp
+bitmap
+raster
+```
+
+Determinar si ya existe alguna función que convierta el diseño del gafete a bitmap 1bpp.
+
+Si existe:
+
+* reutilizarla;
+* no crear otra implementación;
+* conectar su resultado con `generateBrotherRasterJob()`.
+
+Si NO existe:
+
+crear una función pequeña y aislada para convertir el diseño del gafete a un bitmap 1bpp.
+
+---
+
+# TAREA 2 — El diseño visual debe convertirse a bitmap
+
+El diseño actual está en:
 
 ```text
 components/GafeteVisitante.tsx
 ```
 
-El objetivo es que el contenido visual tenga una orientación de identificación.
+Ese componente contiene:
 
----
+* logo;
+* VISITANTE;
+* nombre;
+* empresa;
+* folio;
+* visita A;
+* motivo;
+* identificación;
+* fecha;
+* hora;
+* QR.
 
-# Concepto visual deseado
+El HTML/React NO puede enviarse directamente a la Brother.
 
-Queremos algo conceptualmente parecido a:
+Necesitamos rasterizar ese diseño.
+
+La solución debe producir:
 
 ```text
-┌──────────────────────────────────────────────┐
-│                                              │
-│  LOGO                         VISITANTE       │
-│                                              │
-│  ┌─────────────┐  ┌───────────────────────┐ │
-│  │             │  │ JOSÉ HERNÁNDEZ       │ │
-│  │             │  │ DEMO TECHNIC          │ │
-│  │     QR      │  │                       │ │
-│  │             │  │ FOLIO #904178         │ │
-│  │             │  │                       │ │
-│  └─────────────┘  └───────────────────────┘ │
-│                                              │
-│  VISITA A                                    │
-│  HERNANDEZ, VAZQUEZ, JOSE DE JESUS          │
-│                                              │
-│  MOTIVO              IDENTIFICACIÓN          │
-│  Prueba de sistema   Gafete de empresa       │
-│                                              │
-│  19/08/2026          11:51                    │
-│                                              │
-└──────────────────────────────────────────────┘
+Uint8Array
 ```
 
-La distribución exacta puede adaptarse al espacio disponible, pero debe transmitir claramente una estética de:
+donde:
 
+```text
+1 = píxel negro
+0 = píxel blanco
+```
+
+en formato 1bpp MSB-first, compatible con `generateBrotherRasterJob()`.
+
+---
+
+# TAREA 3 — NO utilizar una captura visual del navegador si puede evitarse
+
+Antes de agregar una dependencia como:
+
+* html2canvas
+* puppeteer
+* playwright
+* chromium
+* screenshot tools
+
+revisar si el proyecto ya tiene una forma de generar el bitmap.
+
+Preferir una implementación determinística para impresión.
+
+Si el diseño visual actual necesita ser rasterizado desde React/HTML, evaluar la solución mínima compatible con la arquitectura existente.
+
+NO introducir dependencias pesadas innecesariamente.
+
+---
+
+# TAREA 4 — Validar las dimensiones del bitmap
+
+El bitmap debe representar:
+
+```text
+Ancho útil: 52 mm
+Longitud: 54 mm
+Resolución: 300 DPI
+```
+
+Pero recordar:
+
+```text
+MEDIA WIDTH = 62 mm
+```
+
+El diseño de 52 mm debe posicionarse dentro del ancho físico del Raster.
+
+No reemplazar el ancho físico de 62 mm por 52 mm.
+
+---
+
+# TAREA 5 — Verificar el problema con una prueba de diagnóstico
+
+Antes de conectar el diseño completo, realizar una prueba temporal.
+
+Crear un bitmap de prueba con:
+
+* un rectángulo negro claramente visible;
+* ocupando aproximadamente el área útil de 52 × 54 mm;
+* centrado dentro del ancho físico de 62 mm.
+
+Enviar ese bitmap a:
+
+```text
+generateBrotherRasterJob()
+```
+
+Si el rectángulo aparece físicamente:
+
+```text
+Raster ✅
+TCP ✅
+Soporte ✅
+Bitmap → Raster ✅
+```
+
+entonces conectar el diseño real.
+
+NO dejar el rectángulo de prueba en producción.
+
+---
+
+# TAREA 6 — Validar el bitmap real
+
+Antes de enviar el Raster, registrar temporalmente:
+
+```text
+bitmap width
+bitmap height
+bitmap length
+black pixel count
+```
+
+Queremos comprobar que:
+
+```text
+black pixel count > 0
+```
+
+Si:
+
+```text
+black pixel count = 0
+```
+
+la conversión del diseño sigue fallando.
+
+---
+
+# TAREA 7 — Mantener el formato esperado por generateBrotherRasterJob()
+
+Actualmente la función hace:
+
+```ts
+const bytesPerBadgeRow = Math.ceil(dims.widthDots / 8);
+```
+
+y luego interpreta el buffer como:
+
+```text
+1 bit por píxel
+MSB first
+```
+
+No cambiar esta convención sin necesidad.
+
+Si el bitmap generado utiliza otra convención, convertirlo antes de pasarlo a:
+
+```ts
+generateBrotherRasterJob()
+```
+
+---
+
+# TAREA 8 — Revisar el flujo completo
+
+El resultado final debe ser:
+
+```text
+handleImprimirBrother()
+        ↓
+getVisitorData()
+        ↓
+generar/renderizar diseño
+        ↓
+crear bitmap 1bpp
+        ↓
+customBitmapBuffer
+        ↓
+sendToBrotherNetworkPrinter()
+        ↓
+generateBrotherRasterJob(data, options, customBitmapBuffer)
+        ↓
+Base64
+        ↓
+POST /api/print/brother
+        ↓
+TCP 10.33.31.94:9100
+        ↓
+Brother QL-810W
+```
+
+Actualmente el punto sospechoso es:
+
+```ts
+generateBrotherRasterJob(data, options)
+```
+
+que debe terminar recibiendo también el bitmap real:
+
+```ts
+generateBrotherRasterJob(
+    data,
+    options,
+    customBitmapBuffer
+)
+```
+
+Pero NO agregues simplemente un buffer vacío.
+
+Debe ser el bitmap real del diseño.
+
+---
+
+# TAREA 9 — Mantener el diseño actual
+
+El diseño visual puede continuar modificándose independientemente del protocolo Brother.
+
+Mantener:
+
+* logo;
+* nombre;
+* empresa;
+* folio;
+* visita;
+* motivo;
 * identificación;
-* tarjeta de acceso;
-* badge corporativo;
-* información compacta;
-* lectura rápida.
+* fecha;
+* hora;
+* QR.
+
+El rediseño visual debe reflejarse en el bitmap que se imprime.
+
+IMPORTANTE:
+
+Si el diseño cambia en `GafeteVisitante.tsx`, el bitmap de impresión debe reflejar ese cambio.
+
+No queremos tener:
+
+```text
+Pantalla → diseño A
+Impresora → diseño B
+```
+
+Queremos:
+
+```text
+Pantalla → diseño actual
+Impresora → mismo diseño actual
+```
 
 ---
 
-# Reglas de diseño
+# TAREA 10 — Blanco y negro
 
-## 1. Mantener toda la información actual
-
-NO eliminar datos.
-
-Debe continuar mostrando:
-
-* Logo Safe Demo
-* VISITANTE
-* Nombre
-* Empresa
-* Folio
-* Visita a
-* Motivo
-* Identificación
-* Fecha
-* Hora
-* QR
-
-El QR debe seguir utilizando exactamente los mismos datos actuales.
-
----
-
-## 2. Cambiar la jerarquía visual
-
-Dar mayor importancia a:
-
-1. Nombre del visitante
-2. Empresa
-3. Folio
-4. VISITANTE
-5. QR
-
-Los datos secundarios:
-
-* Visita a
-* Motivo
-* Identificación
-* Fecha
-* Hora
-
-deben ocupar menos espacio visual.
-
-El nombre debe continuar siendo el elemento tipográfico más importante.
-
----
-
-## 3. Apariencia de identificación
-
-El diseño debe sentirse como una tarjeta de identificación y NO como un documento.
-
-Usar:
-
-* bordes definidos;
-* divisiones limpias;
-* espacios compactos;
-* tipografía sans-serif;
-* jerarquía clara;
-* pocos elementos decorativos;
-* alto contraste;
-* apariencia corporativa.
-
-Mantener estrictamente:
+El bitmap final debe ser estrictamente 1bpp:
 
 ```text
 #000000
 #FFFFFF
 ```
 
-No introducir colores adicionales.
+No utilizar:
+
+* grayscale;
+* antialiasing gris;
+* colores;
+* transparencias.
+
+Si la rasterización produce grises, convertirlos mediante threshold a blanco/negro.
 
 ---
 
-# 4. Distribución recomendada
+# CRITERIO DE ÉXITO
 
-Utilizar una estructura aproximadamente así:
-
-### Header
-
-Parte superior:
+La prueba debe terminar mostrando:
 
 ```text
-LOGO                              VISITANTE
+┌──────────────────────────────┐
+│                              │
+│       DISEÑO DEL GAFETE      │
+│                              │
+│     Nombre                  │
+│     Empresa                 │
+│     Folio                   │
+│     Información             │
+│     QR                      │
+│                              │
+└──────────────────────────────┘
 ```
 
-Mantener el logo y el badge `VISITANTE`.
+en la cinta DK-4205.
 
-### Información principal
+La impresora debe:
 
-Crear una sección donde:
-
-```text
-QR + información principal
-```
-
-estén visualmente relacionados.
-
-Por ejemplo:
-
-```text
-┌───────────┐
-│           │    JOSÉ HERNÁNDEZ
-│    QR     │    DEMO TECHNIC
-│           │    FOLIO #904178
-└───────────┘
-```
-
-El QR debe seguir siendo suficientemente grande para poder escanearse.
+* aceptar el trabajo;
+* imprimir el diseño;
+* cortar correctamente a la longitud configurada.
 
 ---
 
-### Información secundaria
+# RESTRICCIONES
 
-Debajo o al costado de la información principal:
+NO:
 
-```text
-VISITA A
-HERNANDEZ, VAZQUEZ, JOSE DE JESUS
+* Zebra;
+* ZPL;
+* window.print();
+* Chrome Print Dialog;
+* PDF;
+* Windows Print Spooler;
+* cambiar media width de 62 mm;
+* cambiar el tipo de soporte;
+* cambiar `0x8E`;
+* cambiar `0x0A`;
+* crear un segundo sistema de impresión;
+* introducir dependencias pesadas sin justificación.
 
-MOTIVO                 IDENTIFICACIÓN
-Prueba de sistema     Gafete de empresa
-```
+SÍ:
 
-Evitar que estos campos ocupen una gran sección vertical vacía como ocurre actualmente.
-
----
-
-### Footer
-
-Fecha y hora pueden ir en una zona compacta:
-
-```text
-19/08/2026    11:51
-```
-
-No necesitan ocupar una sección completa del diseño.
-
----
-
-# 5. Aprovechamiento del espacio
-
-El diseño actual tiene una gran cantidad de espacio vacío en la sección central.
-
-Eliminar ese espacio desperdiciado.
-
-La información debe distribuirse de forma mucho más compacta.
-
-La prioridad es:
-
-```text
-más información útil
-menos espacio vacío
-mejor jerarquía
-apariencia de identificación
-```
+* reutilizar `generateBrotherRasterJob()`;
+* proporcionar un `customBitmapBuffer` real;
+* conservar Brother Raster;
+* conservar TCP;
+* conservar DK-4205;
+* conservar media width = 62 mm.
 
 ---
 
-# 6. No cambiar las dimensiones de impresión
+# VALIDACIÓN FINAL
 
-MUY IMPORTANTE:
+Ejecutar:
 
-Este cambio es exclusivamente visual.
-
-NO modificar:
-
-* Brother QL-810W
-* DK-4205
-* Media Width = 62 mm
-* Continuous Length
-* TCP 10.33.31.94:9100
-* Brother Raster
-* resolución
-* generación del bitmap
-* ancho físico de la cinta
-* longitud de corte
-* orientación del Raster
-* `generateBrotherRasterJob()`
-* `sendToBrotherNetworkPrinter()`
-* `/api/print/brother`
-
-NO cambiar:
-
-```text
-62 mm
-```
-
-porque representa el soporte físico.
-
-El nuevo diseño visual debe adaptarse al espacio que ya utiliza el sistema de impresión.
-
----
-
-# 7. No modificar datos
-
-Mantener exactamente:
-
-```ts
-qrData
-```
-
-y la estructura actual:
-
-```ts
-{
-  folio,
-  nombre,
-  empresa,
-  fecha
-}
-```
-
-No cambiar el contenido del QR.
-
-Mantener:
-
-```ts
-formatBadgeDate()
-MOTIVOS_MAP
-IDENTIFICACIONES_MAP
-```
-
----
-
-# 8. Responsive / impresión
-
-El componente debe seguir funcionando correctamente cuando:
-
-* se visualiza en pantalla;
-* se genera el bitmap;
-* se imprime mediante Brother Raster.
-
-No depender de:
-
-* transformaciones CSS que puedan alterar incorrectamente el bitmap;
-* `rotate()` sobre todo el componente;
-* elementos que desaparezcan al rasterizar;
-* fuentes externas;
-* colores no soportados.
-
-Preferir una nueva composición mediante:
-
-```text
-flex
-grid
-position
-padding
-gap
-```
-
-en lugar de simplemente hacer:
-
-```css
-transform: rotate(90deg)
-```
-
-a todo el gafete.
-
-Queremos **rediseñar la composición**, no simplemente girar la imagen completa.
-
----
-
-# 9. Mantener blanco y negro
-
-Todo el componente debe seguir usando únicamente:
-
-```text
-background: #FFFFFF
-color: #000000
-border: #000000
-```
-
-El QR:
-
-```text
-fgColor="#000000"
-bgColor="#FFFFFF"
-```
-
-Debe mantenerse.
-
----
-
-# 10. Implementación
-
-Antes de modificar:
-
-1. Lee completamente `components/GafeteVisitante.tsx`.
-2. Identifica todos los elementos actuales.
-3. Mantén todos los datos y props.
-4. Rediseña únicamente el JSX/layout/style.
-5. No cambies la lógica de negocio.
-
-Después:
-
-1. Ejecuta typecheck.
-2. Ejecuta lint si existe.
-3. Ejecuta build si existe.
-4. Verifica visualmente el componente.
-5. Verifica que el QR continúe apareciendo.
-6. Verifica que todos los campos continúen apareciendo.
-7. Verifica que no se haya modificado el flujo de impresión.
-
----
-
-# Criterio de éxito
-
-El resultado debe verse claramente como una:
-
-**IDENTIFICACIÓN CORPORATIVA DE VISITANTE**
-
-y no como un:
-
-**GAFETE VERTICAL TRADICIONAL**.
-
-Debe aprovechar mucho mejor el espacio, eliminar el gran vacío central y colocar la información principal en una composición compacta y equilibrada.
-
-La impresión Brother debe continuar funcionando exactamente igual que antes.
+1. Typecheck.
+2. Lint.
+3. Build.
+4. Prueba del bitmap.
+5. Verificar `black pixel count > 0`.
+6. Prueba real de impresión.
+7. Confirmar que el diseño aparece.
+8. Confirmar que el corte sigue funcionando.
 
 Al finalizar reportar únicamente:
 
-1. Archivo modificado.
-2. Resumen de la nueva composición.
-3. Resultado de typecheck/lint/build.
-4. Confirmación de que el flujo de impresión Brother no fue modificado.
+1. Causa raíz.
+2. Cómo se generó el bitmap.
+3. Archivos modificados.
+4. Resultado de typecheck/lint/build.
+5. Resultado de impresión física.
+
+No hacer refactors fuera de este problema.

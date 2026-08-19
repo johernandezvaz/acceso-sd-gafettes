@@ -36,7 +36,7 @@ body {
 @media print {
   @page {
     margin: 0;
-    size: 53mm 84.5mm portrait;
+    size: 53mm 54mm portrait;
   }
 
   html,
@@ -44,7 +44,7 @@ body {
     margin: 0;
     padding: 0;
     width: 53mm;
-    height: 84.5mm;
+    height: 54mm;
     overflow: visible !important;
     background: #FFFFFF !important;
     color: #000000 !important;

@@ -1,18 +1,28 @@
 import { generateBrotherRasterJob, type VisitorBadgeData, type BrotherPrintOptions } from './visitorBadge';
+import { renderVisitorBadgeTo1bpp } from './badgeRasterizer';
 
 export interface BrotherPrintResult {
   success: boolean;
   method: 'browser-dialog' | 'network-tcp' | 'download-prn';
   message: string;
   error?: string;
+  blackPixelCount?: number;
 }
 
-export function downloadBrotherPrnFile(
+export async function downloadBrotherPrnFile(
   data: VisitorBadgeData,
   filename?: string,
-  options?: BrotherPrintOptions
-): void {
-  const binaryJob = generateBrotherRasterJob(data, options);
+  options?: BrotherPrintOptions,
+  customBitmapBuffer?: Uint8Array
+): Promise<void> {
+  let bitmapBuffer = customBitmapBuffer;
+
+  if (!bitmapBuffer && typeof document !== 'undefined') {
+    const rasterResult = await renderVisitorBadgeTo1bpp(data, options);
+    bitmapBuffer = rasterResult.buffer;
+  }
+
+  const binaryJob = generateBrotherRasterJob(data, options, bitmapBuffer);
   const name = filename || `gafete-brother-${data.folio || 'visitante'}.prn`;
 
   const blob = new Blob([binaryJob as Uint8Array<ArrayBuffer>], { type: 'application/octet-stream' });
@@ -59,10 +69,30 @@ export async function sendToBrotherNetworkPrinter(
   data: VisitorBadgeData,
   printerIp: string,
   printerPort = 9100,
-  options?: BrotherPrintOptions
+  options?: BrotherPrintOptions,
+  customBitmapBuffer?: Uint8Array
 ): Promise<BrotherPrintResult> {
   try {
-    const binaryJob = generateBrotherRasterJob(data, options);
+    let bitmapBuffer = customBitmapBuffer;
+    let blackPixels = 0;
+
+    // Si no se proveyó un buffer manual y estamos en navegador, rasterizar el diseño
+    if (!bitmapBuffer && typeof document !== 'undefined') {
+      const rasterResult = await renderVisitorBadgeTo1bpp(data, options);
+      bitmapBuffer = rasterResult.buffer;
+      blackPixels = rasterResult.blackPixelCount;
+
+      console.log(
+        `[Brother Printer] Rasterización completada: ${rasterResult.widthDots}x${rasterResult.heightDots} dots, ` +
+        `${bitmapBuffer.length} bytes, ${blackPixels} píxeles negros.`
+      );
+
+      if (blackPixels === 0) {
+        console.warn('[Brother Printer] ADVERTENCIA: El bitmap generado no contiene píxeles negros.');
+      }
+    }
+
+    const binaryJob = generateBrotherRasterJob(data, options, bitmapBuffer);
     const base64Data = uint8ArrayToBase64(binaryJob);
 
     const response = await fetch('/api/print/brother', {
@@ -86,7 +116,8 @@ export async function sendToBrotherNetworkPrinter(
     return {
       success: true,
       method: 'network-tcp',
-      message: `Gafete enviado exitosamente a la Brother QL-810W (${printerIp}:${printerPort})`,
+      message: `Gafete enviado exitosamente a la Brother QL-810W (${printerIp}:${printerPort}) [${blackPixels} px negros]`,
+      blackPixelCount: blackPixels,
     };
   } catch (error) {
     return {
@@ -97,3 +128,4 @@ export async function sendToBrotherNetworkPrinter(
     };
   }
 }
+

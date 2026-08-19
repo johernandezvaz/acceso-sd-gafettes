@@ -135,9 +135,9 @@ export default function NuevoVisitantePage() {
     }
   };
 
-  const handleDescargarPrn = () => {
+  const handleDescargarPrn = async () => {
     const data = getVisitorData();
-    downloadBrotherPrnFile(data, `gafete-brother-${folioRegistro || 'visitante'}.prn`);
+    await downloadBrotherPrnFile(data, `gafete-brother-${folioRegistro || 'visitante'}.prn`);
     setPrintStatus('Archivo binario .PRN (Brother Raster) descargado');
   };
 
