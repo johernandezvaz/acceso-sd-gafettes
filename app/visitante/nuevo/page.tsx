@@ -22,7 +22,7 @@ import { SYSTEM_NAME, ROUTES } from '@/lib/constants';
 import { createVisitor, type VisitHostOption } from '@/app/actions/visitors';
 import VisitHostPicker from '@/components/ui/VisitHostPicker';
 import {
-  printViaBrowserDialog,
+  sendToBrotherNetworkPrinter,
   downloadBrotherPrnFile,
 } from '@/lib/printing/brother/printer';
 import type { VisitorBadgeData } from '@/lib/printing/brother/visitorBadge';
@@ -108,10 +108,31 @@ export default function NuevoVisitantePage() {
 
   const handleImprimirBrother = async () => {
     setIsPrinting(true);
-    setPrintStatus('Abriendo diálogo de impresión para Brother QL-810W...');
-    await printViaBrowserDialog();
+    setPrintStatus('Enviando gafete a Brother QL-810W...');
+    const data = getVisitorData();
+    const result = await sendToBrotherNetworkPrinter(
+      data,
+      process.env.NEXT_PUBLIC_BROTHER_PRINTER_IP ?? '10.33.31.94',
+      Number(process.env.NEXT_PUBLIC_BROTHER_PRINTER_PORT ?? 9100)
+    );
     setIsPrinting(false);
-    setPrintStatus('Listo para imprimir en Brother QL-810W');
+    if (result.success) {
+      setPrintStatus('✓ Gafete enviado correctamente a la Brother QL-810W');
+      setTimeout(() => router.push(ROUTES.home), 1500);
+    } else {
+      const errMsg = result.error ?? '';
+      if (errMsg.includes('ECONNREFUSED') || errMsg.includes('ECONNRESET')) {
+        setPrintStatus('✗ Impresora no disponible — verifica que esté encendida y en red');
+      } else if (errMsg.toLowerCase().includes('timeout') || errMsg.includes('ETIMEDOUT')) {
+        setPrintStatus('✗ Timeout — la impresora no respondió a tiempo');
+      } else if (errMsg.includes('ENOTFOUND') || errMsg.includes('ENETUNREACH')) {
+        setPrintStatus('✗ Error de conexión — no se pudo alcanzar la impresora');
+      } else if (errMsg) {
+        setPrintStatus(`✗ Error del servidor: ${errMsg}`);
+      } else {
+        setPrintStatus('✗ No se pudo imprimir — intenta descargar el .PRN como alternativa');
+      }
+    }
   };
 
   const handleDescargarPrn = () => {

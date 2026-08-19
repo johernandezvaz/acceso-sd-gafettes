@@ -1,168 +1,160 @@
-1. visitorBadge.ts — cut size configurable + tipo de medio correcto
-typescript
-export interface BrotherPrintOptions {
-  dpi?: number;
-  mediaWidthMm?: number;
-  heightMm?: number; // NUEVO: antes el largo estaba hardcodeado en la constante,
-                      // sin esto nunca vas a poder "definir el tamaño del corte" por job
-  autoCut?: boolean;
-}
+# Objetivo: Impresión directa Brother QL-810W por red
 
-export function calculateBrotherDimensions(
-  dpi = BROTHER_DEFAULT_DPI,
-  heightMm = BADGE_PHYSICAL_DIMENSIONS.heightMm // ahora parametrizable
-) {
-  const widthDots = Math.round((BADGE_PHYSICAL_DIMENSIONS.widthMm / 25.4) * dpi);
-  const heightDots = Math.round((heightMm / 25.4) * dpi);
+Necesito eliminar completamente el diálogo de impresión de Google Chrome para los gafetes de visitantes y enviar directamente el Brother Raster Command Stream a una Brother QL-810W mediante TCP/IP.
 
-  return {
-    widthMm: BADGE_PHYSICAL_DIMENSIONS.widthMm,
-    heightMm,
-    dpi,
-    widthDots,
-    heightDots,
-  };
-}
+## Datos de la impresora
 
-En generateBrotherRasterJob:
+- Modelo: Brother QL-810W
+- Nombre: Brother QL-810W
+- IP: 10.33.31.94
+- Puerto RAW TCP: 9100
+- Conectividad verificada desde Windows:
+  Test-NetConnection 10.33.31.94 -Port 9100
+  TcpTestSucceeded: True
 
-typescript
-export function generateBrotherRasterJob(
-  data: VisitorBadgeData,
-  options: BrotherPrintOptions = {},
-  customBitmapBuffer?: Uint8Array
-): Uint8Array {
-  const dims = calculateBrotherDimensions(
-    options.dpi ?? BROTHER_DEFAULT_DPI,
-    options.heightMm ?? BADGE_PHYSICAL_DIMENSIONS.heightMm
-  );
-  const mediaWidth = options.mediaWidthMm ?? 62;
-  const autoCut = options.autoCut ?? true;
+## Restricciones
 
-  // Validación dura: el cabezal de la QL-810W tiene 720 pines ≈ 62mm.
-  // Sin esto, si alguien pasa un mediaWidthMm mal, fallas en silencio en la impresora,
-  // no en tu código — mucho más caro de debuggear.
-  if (mediaWidth > 62) {
-    throw new Error(
-      `mediaWidthMm=${mediaWidth} excede el máximo físico de la QL-810W (62mm).`
-    );
-  }
+NO usar:
+- window.print()
+- diálogo de impresión de Chrome
+- impresión HTML/CSS del navegador
+- PDF como intermediario
+- Windows Print Dialog
+- Zebra
+- ZPL
+- ^XA, ^XZ, ^FO, ^FD, ^PW, ^LL, ^BQN
+- ningún comando específico de Zebra
 
-  const PIN_COUNT = 720;
-  const BYTES_PER_LINE = PIN_COUNT / 8;
-  const totalLines = dims.heightDots;
-  const leftOffsetDots = Math.max(0, Math.floor((PIN_COUNT - dims.widthDots) / 2));
+La impresión debe utilizar exclusivamente el Brother QL Raster Command Stream existente en:
 
-  const chunks: Uint8Array[] = [];
+lib/printing/brother/
 
-  chunks.push(new Uint8Array(200));
-  chunks.push(new Uint8Array([0x1B, 0x40]));
-  chunks.push(new Uint8Array([0x1B, 0x69, 0x61, 0x01]));
+## Estado actual
 
-  const mediaInfo = new Uint8Array(13);
-  mediaInfo[0] = 0x1B;
-  mediaInfo[1] = 0x69;
-  mediaInfo[2] = 0x7A;
-  mediaInfo[3] = 0x86;
-  mediaInfo[4] = 0x0B; // CAMBIO: 0x0A = etiqueta troquelada (tamaño fijo de fábrica).
-                       // 0x0B = cinta continua. Tu badge es un tamaño custom, no un
-                       // troquel comprado — con 0x0A la impresora puede rechazar el job
-                       // o ignorar tu longitud.
-  mediaInfo[5] = mediaWidth;
-  mediaInfo[6] = 0; // en medio continuo esto se queda en 0 siempre: el corte lo define
-                    // el número de líneas raster que mandas (totalLines), no este campo.
-  mediaInfo[7] = totalLines & 0xFF;
-  mediaInfo[8] = (totalLines >> 8) & 0xFF;
-  mediaInfo[9] = 0x00;
-  mediaInfo[10] = 0x00;
-  mediaInfo[11] = 0x00;
-  mediaInfo[12] = 0x00;
-  chunks.push(mediaInfo);
+Ya existe una implementación parcial:
 
-  // ... resto igual (ESC i M, ESC i K, ESC i d, líneas raster, 0x1A)
+- printer.ts contiene generateBrotherRasterJob()
+- printer.ts contiene sendToBrotherNetworkPrinter()
+- sendToBrotherNetworkPrinter() genera el Raster y hace POST a:
+  /api/print/brother
+- El payload se envía como Base64
+- El puerto predeterminado es 9100
+- También existe printViaBrowserDialog(), que actualmente usa window.print()
 
-Con esto, "definir el tamaño del corte" ya es real: generateBrotherRasterJob(data, { heightMm: 90 }) te da un badge de otro largo, sin tocar la constante global. Ojo: el flag 0x0B lo baso en la referencia estándar del protocolo raster de Brother; si al probar con la impresora física el job no corta o se traba, es el primer byte que yo revisaría — no tengo forma de verificarlo sin el dispositivo en mano.
+No dupliques esta lógica ni crees otro sistema de impresión si la implementación existente puede reutilizarse.
 
-2. Rotación de contenido — no toques generateBrotherRasterJob, rota el bitmap antes
+## Dimensiones obligatorias
 
-Como confirmaste que el medio sigue alimentándose en portrait, la rotación es un problema de quién genera el customBitmapBuffer (tu renderer de canvas, que no me compartiste), no de esta función. Le agrego un helper puro en el mismo archivo:
+Mantener exactamente:
 
-typescript
-/**
- * Rota 90° en sentido horario un bitmap empaquetado 1bpp (MSB primero).
- * Úsalo así: renderiza tu diseño en un canvas "landscape" de
- * heightDots × widthDots (84.5mm × 53mm), empácalo a 1bpp, y pasa
- * ese buffer aquí para obtener un buffer válido para generateBrotherRasterJob
- * (widthDots × heightDots, portrait), sin cambiar cómo se alimenta el medio.
- */
-export function rotateBitmap90CW(
-  srcBuffer: Uint8Array,
-  srcWidthDots: number,
-  srcHeightDots: number
-): { buffer: Uint8Array; widthDots: number; heightDots: number } {
-  const srcRowBytes = Math.ceil(srcWidthDots / 8);
-  const dstWidthDots = srcHeightDots;
-  const dstHeightDots = srcWidthDots;
-  const dstRowBytes = Math.ceil(dstWidthDots / 8);
-  const dstBuffer = new Uint8Array(dstRowBytes * dstHeightDots);
+- Ancho: 53 mm
+- Alto: 84.5 mm
+- Orientación: portrait / vertical
+- 300 DPI
+- Blanco y negro exclusivamente:
+  #000000
+  #FFFFFF
 
-  const getPixel = (x: number, y: number) =>
-    (srcBuffer[y * srcRowBytes + (x >> 3)] & (1 << (7 - (x % 8)))) !== 0;
+El generador existente ya define estas dimensiones. No modificar el formato Raster salvo que sea estrictamente necesario para que la QL-810W acepte correctamente el trabajo.
 
-  const setPixel = (x: number, y: number) => {
-    dstBuffer[y * dstRowBytes + (x >> 3)] |= 1 << (7 - (x % 8));
-  };
+## Tarea
 
-  for (let sy = 0; sy < srcHeightDots; sy++) {
-    for (let sx = 0; sx < srcWidthDots; sx++) {
-      if (getPixel(sx, sy)) {
-        setPixel(srcHeightDots - 1 - sy, sx);
-      }
-    }
-  }
+1. Analiza el flujo actual de impresión.
+2. Identifica dónde se llama actualmente a printViaBrowserDialog() o window.print().
+3. Reemplaza ese flujo por sendToBrotherNetworkPrinter().
+4. Completa o corrige el endpoint backend /api/print/brother si es necesario.
+5. El backend debe:
+   - recibir IP, puerto y payloadBase64;
+   - convertir Base64 a bytes;
+   - abrir una conexión TCP hacia la impresora;
+   - enviar los bytes directamente mediante socket;
+   - esperar/validar el cierre o resultado de la conexión;
+   - devolver JSON indicando success/error.
+6. Por seguridad y simplicidad, considera que la IP de producción debe ser configurable mediante variable de entorno:
+   BROTHER_PRINTER_IP=10.33.31.94
+   BROTHER_PRINTER_PORT=9100
+7. Si el proyecto ya tiene configuración de variables de entorno, reutiliza su patrón existente.
+8. Evita enviar el Raster dos veces o regenerarlo innecesariamente.
+9. No conviertas el Raster a otra representación.
+10. No introduzcas dependencias nuevas si Node.js/Next.js ya permite resolverlo con APIs nativas.
+11. Mantén el manejo de errores existente y devuelve mensajes útiles.
+12. El frontend debe mostrar claramente:
+   - impresión enviada correctamente;
+   - impresora no disponible;
+   - timeout;
+   - error de conexión;
+   - error del servidor.
 
-  return { buffer: dstBuffer, widthDots: dstWidthDots, heightDots: dstHeightDots };
-}
+## Eficiencia
 
-Importante: no sé si tu renderer produce el bitmap en el orden de bits que asumí (MSB-first, fila por fila) — eso depende de cómo empaques el canvas a 1bpp. Si tienes ese archivo, compártelo y te confirmo si rotateBitmap90CW calza directo o necesita ajuste de orientación (CW vs CCW se ve fácil de invertir, solo cambia el mapeo de índices, pero necesitas probarlo una vez contra la impresora real para confirmar que el texto no sale espejeado o al revés — no lo voy a adivinar bien sin verlo).
+Prioriza una implementación pequeña y directa:
 
-3. print.ts — bug real de encoding + quitar el diálogo del flujo
-typescript
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  // FIX: spread de un array grande (~90k+ bytes a 300dpi) en
-  // String.fromCharCode(...bytes) revienta el call stack en la mayoría
-  // de motores JS. Esto es un bug latente que probablemente no has visto
-  // porque a DPI bajo el array es chico.
-  const CHUNK_SIZE = 0x8000;
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK_SIZE));
-  }
-  return btoa(binary);
-}
+Frontend:
+VisitorBadgeData
+→ generateBrotherRasterJob()
+→ Base64
+→ POST /api/print/brother
 
-export async function sendToBrotherNetworkPrinter(
-  data: VisitorBadgeData,
-  printerIp: string,
-  printerPort = 9100,
-  options?: BrotherPrintOptions
-): Promise<BrotherPrintResult> {
-  try {
-    const binaryJob = generateBrotherRasterJob(data, options);
-    const base64Data = uint8ArrayToBase64(binaryJob); // antes: btoa(String.fromCharCode(...binaryJob))
-    // ... resto igual
+Backend:
+POST /api/print/brother
+→ Base64 decode
+→ TCP socket 10.33.31.94:9100
+→ socket.write()
+→ respuesta JSON
 
-Y en tu handler de "guardar visitante" (el componente que no me compartiste), el cambio es simplemente no llamar printViaBrowserDialog:
+No agregues abstracciones, servicios, clases o archivos innecesarios.
 
-typescript
-async function handleGuardarVisitante(formData: VisitorBadgeData) {
-  await saveVisitorToDb(formData); // lo que ya tengas
-  const result = await sendToBrotherNetworkPrinter(formData, PRINTER_IP, 9100);
-  if (!result.success) {
-    // maneja el error explícitamente — sin diálogo de por medio, si la
-    // impresora está apagada o la IP cambió, el usuario no se entera
-    // a menos que tú se lo muestres en la UI
-  }
-}
+## Configuración
 
-Esto último es un punto que vale la pena que pienses: al quitar el diálogo del navegador pierdes la retroalimentación nativa de "impresora sin papel/offline" que Chrome te daba gratis. Necesitas manejar esos estados de error tú mismo en la UI del kiosco (¿reintento automático? ¿alerta visual para el guardia de seguridad?), porque ahora el fallo es silencioso desde la perspectiva del usuario si no lo expones.
+Idealmente:
+
+BROTHER_PRINTER_IP=10.33.31.94
+BROTHER_PRINTER_PORT=9100
+
+Pero conserva la posibilidad de pasar IP/puerto desde el frontend únicamente si el proyecto actual realmente lo necesita.
+
+## Importante
+
+Antes de modificar código:
+
+- Inspecciona los archivos relacionados con impresión.
+- Identifica el flujo actual.
+- Reutiliza las funciones existentes.
+- No cambies generateBrotherRasterJob() si no es necesario.
+- No cambies el diseño visual del gafete.
+- No cambies dimensiones.
+- No cambies el QR.
+- No cambies el contenido del gafete.
+- No cambies la orientación.
+
+Después de implementar:
+
+1. Ejecuta typecheck/lint/build según los scripts existentes.
+2. Verifica que no queden llamadas a window.print() en el flujo de impresión del gafete.
+3. Verifica que sendToBrotherNetworkPrinter() sea realmente utilizado.
+4. Verifica que /api/print/brother exista y funcione.
+5. Si es posible, realiza una prueba real contra:
+   10.33.31.94:9100
+6. No hagas cambios fuera del alcance de impresión.
+
+## Criterio de éxito
+
+Al presionar "Imprimir gafete":
+
+Usuario
+→ botón Imprimir
+→ generateBrotherRasterJob()
+→ /api/print/brother
+→ TCP 10.33.31.94:9100
+→ Brother QL-810W
+→ gafete impreso
+
+Sin abrir Google Chrome Print Dialog y sin intervención manual del usuario.
+
+Al finalizar, proporciona únicamente:
+
+1. Archivos modificados.
+2. Resumen breve de cambios.
+3. Cómo configurar la IP/puerto.
+4. Resultado de typecheck/build.
+5. Si la prueba TCP/impresión fue exitosa.
