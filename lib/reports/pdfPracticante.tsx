@@ -138,7 +138,7 @@ export function PdfPracticante(props: PdfPracticanteProps) {
   }
 
   const footerRender = ({ pageNumber, totalPages }: { pageNumber: number; totalPages: number }) =>
-    `Página ${pageNumber} de ${totalPages} — Generado por CODA`
+    `Página ${pageNumber} de ${totalPages}`
 
   return (
     <Document>
