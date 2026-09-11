@@ -11,7 +11,7 @@ datasource db {
 }
 
 // ─────────────────────────────────────────────────────────────
-// ADMIN USERS — usuarios que pueden acceder al panel administrativo
+// ADMIN USERS — usuarios que pueden acceder al panel administrativos
 // ─────────────────────────────────────────────────────────────
 model AdminUser {
   id                 String    @id @default(cuid())
