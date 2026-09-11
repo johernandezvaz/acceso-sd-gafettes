@@ -39,8 +39,9 @@ export default function ReportePracticante() {
   const [titulo, setTitulo] = useState('SOLICITUD DE TRANSFERENCIA')
   const [beneficiario, setBeneficiario] = useState('')
   const [concepto, setConcepto] = useState('BECA PRACTICAS PROFESIONALES')
-  const [solicitadoPor, setSolicitadoPor] = useState('')
-  const [autorizadoPor, setAutorizadoPor] = useState('')
+  const [solicitadoPor, setSolicitadoPor] = useState('IVETT MELENDEZ')
+  const [autorizadoPor1, setAutorizadoPor1] = useState('ERIC ALEXANDRE')
+  const [autorizadoPor2, setAutorizadoPor2] = useState('MARIA LARA')
   const [tarifa, setTarifa] = useState(45)
   const [tarifaInput, setTarifaInput] = useState('45')
 
@@ -121,7 +122,8 @@ export default function ReportePracticante() {
       beneficiario={beneficiario}
       concepto={concepto}
       solicitadoPor={solicitadoPor}
-      autorizadoPor={autorizadoPor}
+      autorizadoPor1={autorizadoPor1}
+      autorizadoPor2={autorizadoPor2}
       tarifa={tarifa}
       importeTotal={importeFinal}
       importeEnLetras={importeLetras}
@@ -197,8 +199,12 @@ export default function ReportePracticante() {
             <input type="text" value={solicitadoPor} onChange={e => setSolicitadoPor(e.target.value)} className={inputCls} />
           </div>
           <div>
-            <label className={labelCls}>Autorizado por</label>
-            <input type="text" value={autorizadoPor} onChange={e => setAutorizadoPor(e.target.value)} className={inputCls} />
+            <label className={labelCls}>Autorizado por — Gerente General</label>
+            <input type="text" value={autorizadoPor1} onChange={e => setAutorizadoPor1(e.target.value)} className={inputCls} />
+          </div>
+          <div className="sm:col-span-2 sm:col-start-2">
+            <label className={labelCls}>Autorizado por — Gerente de Finanzas</label>
+            <input type="text" value={autorizadoPor2} onChange={e => setAutorizadoPor2(e.target.value)} className={inputCls} />
           </div>
         </div>
       </div>

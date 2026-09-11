@@ -88,10 +88,21 @@ function PdfHeaderBlock({ logoBase64 }: { logoBase64?: string }) {
   )
 }
 
-function PdfSignatures({ solicitadoPor, autorizadoPor }: { solicitadoPor: string; autorizadoPor: string }) {
+function PdfSignatures({
+  solicitadoPor, autorizadoPor1, autorizadoPor2,
+}: {
+  solicitadoPor: string
+  autorizadoPor1: string
+  autorizadoPor2: string
+}) {
+  const boxes: [string, string][] = [
+    ['Solicitado por', solicitadoPor],
+    ['Autorizado por\n(Gerente General)', autorizadoPor1],
+    ['Autorizado por\n(Gerente de Finanzas)', autorizadoPor2],
+  ]
   return (
     <View style={s.signaturesBlock}>
-      {[['Solicitado por', solicitadoPor], ['Autorizado por', autorizadoPor]].map(([lbl, nombre]) => (
+      {boxes.map(([lbl, nombre]) => (
         <View key={lbl} style={s.signatureBox}>
           <View style={s.signatureLine} />
           <Text style={s.signatureName}>{nombre}</Text>
@@ -110,7 +121,8 @@ export interface PdfPracticanteProps {
   beneficiario: string
   concepto: string
   solicitadoPor: string
-  autorizadoPor: string
+  autorizadoPor1: string
+  autorizadoPor2: string
   tarifa: number
   importeTotal: number
   importeEnLetras: string
@@ -123,7 +135,7 @@ export interface PdfPracticanteProps {
 export function PdfPracticante(props: PdfPracticanteProps) {
   const {
     titulo, quincenaLabel, alumno, beneficiario, concepto,
-    solicitadoPor, autorizadoPor, tarifa,
+    solicitadoPor, autorizadoPor1, autorizadoPor2, tarifa,
     importeTotal, importeEnLetras, importeManual,
     days, totalHoras, logoBase64,
   } = props
@@ -180,7 +192,7 @@ export function PdfPracticante(props: PdfPracticanteProps) {
           )}
         </View>
 
-        {extraPages.length === 0 && <PdfSignatures solicitadoPor={solicitadoPor} autorizadoPor={autorizadoPor} />}
+        {extraPages.length === 0 && <PdfSignatures solicitadoPor={solicitadoPor} autorizadoPor1={autorizadoPor1} autorizadoPor2={autorizadoPor2} />}
         <Text style={s.footerNote} render={footerRender} fixed />
       </Page>
 
@@ -201,7 +213,7 @@ export function PdfPracticante(props: PdfPracticanteProps) {
               </View>
             )}
           </View>
-          {pi === extraPages.length - 1 && <PdfSignatures solicitadoPor={solicitadoPor} autorizadoPor={autorizadoPor} />}
+          {pi === extraPages.length - 1 && <PdfSignatures solicitadoPor={solicitadoPor} autorizadoPor1={autorizadoPor1} autorizadoPor2={autorizadoPor2} />}
           <Text style={s.footerNote} render={footerRender} fixed />
         </Page>
       ))}

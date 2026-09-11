@@ -35,6 +35,67 @@ export async function registerAccess(
   }
 }
 
+export async function createAccessRecordForDate(
+  personId: string,
+  movement: 'ENTRY' | 'EXIT',
+  dateKey: string,
+  time: string,
+): Promise<{ success: boolean; error?: string; id?: string }> {
+  const session = await requireAuth()
+
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    return { success: false, error: 'Formato de hora inválido. Use HH:mm (ej. 08:30)' }
+  }
+
+  const [hh, mm] = time.split(':').map(Number)
+  const [year, month, day] = dateKey.split('-').map(Number)
+  const newTimestamp = new Date(year, month - 1, day, hh, mm, 0, 0)
+
+  if (movement === 'EXIT') {
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0)
+    const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999)
+    const lastEntry = await prisma.accessRecord.findFirst({
+      where: { personId, movement: 'ENTRY', timestamp: { gte: dayStart, lte: dayEnd } },
+      orderBy: { timestamp: 'desc' },
+    })
+    if (lastEntry && newTimestamp <= lastEntry.timestamp) {
+      return { success: false, error: 'La hora de salida no puede ser anterior o igual a la hora de entrada' }
+    }
+  }
+
+  if (movement === 'ENTRY') {
+    const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0)
+    const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999)
+    const nextExit = await prisma.accessRecord.findFirst({
+      where: { personId, movement: 'EXIT', timestamp: { gte: dayStart, lte: dayEnd } },
+      orderBy: { timestamp: 'asc' },
+    })
+    if (nextExit && newTimestamp >= nextExit.timestamp) {
+      return { success: false, error: 'La hora de entrada no puede ser posterior o igual a la hora de salida registrada' }
+    }
+  }
+
+  const record = await prisma.accessRecord.create({
+    data: {
+      personId,
+      movement: movement as Movement,
+      timestamp: newTimestamp,
+      editedAt: new Date(),
+    },
+  })
+
+  await logAction(session.adminId, 'EDIT_ACCESS_RECORD', 'AccessRecord', record.id, {
+    action: 'CREATE_MANUAL',
+    movement,
+    timestamp: newTimestamp.toISOString(),
+    personId,
+    dateKey,
+    editedBy: session.email,
+  })
+
+  return { success: true, id: record.id }
+}
+
 export async function updateAccessRecordTimestamp(
   recordId: string,
   newTime: string

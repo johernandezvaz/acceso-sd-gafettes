@@ -1,9 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { getDailyAccessRecords, updateAccessRecordTimestamp, type DailyAccessRecordRow } from '@/app/actions/access'
+import {
+  getDailyAccessRecords,
+  updateAccessRecordTimestamp,
+  createAccessRecordForDate,
+  type DailyAccessRecordRow,
+  type DailyMovementItem,
+} from '@/app/actions/access'
 import { getPersonTypes, type PersonTypeOption } from '@/app/actions/people'
-import { Search, X, Calendar, ChevronLeft, ChevronRight, ListOrdered, AlertCircle, CheckCircle2, Timer, Pencil, Check, Ban, PencilLine } from 'lucide-react'
+import {
+  Search, X, Calendar, ChevronLeft, ChevronRight,
+  AlertCircle, CheckCircle2, Timer, Check, Ban,
+} from 'lucide-react'
 
 const TYPE_COLORS: Record<string, string> = {
   practicantes: 'bg-sky-100 text-sky-700',
@@ -50,75 +59,144 @@ function getDateRange(preset: string): { from: string; to: string } {
   return { from: '', to: '' }
 }
 
-function EditableTime({
-  recordId,
-  currentTime,
+function isToday(dateKey: string): boolean {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const d = String(now.getDate()).padStart(2, '0')
+  return dateKey === `${y}-${m}-${d}`
+}
+
+function InlineTime({
+  mov,
   onSaved,
   onError,
 }: {
-  recordId: string
-  currentTime: string
-  onSaved: (newTime: string) => void
+  mov: DailyMovementItem
+  onSaved: (id: string, newTime: string) => void
   onError: (msg: string) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [value, setValue] = useState(currentTime)
+  const [value, setValue] = useState(mov.time)
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
     setSaving(true)
-    const result = await updateAccessRecordTimestamp(recordId, value)
+    const result = await updateAccessRecordTimestamp(mov.id, value)
     setSaving(false)
     if (result.success) {
-      onSaved(value)
+      onSaved(mov.id, value)
       setEditing(false)
     } else {
       onError(result.error ?? 'Error al guardar')
     }
   }
 
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave()
+    if (e.key === 'Escape') setEditing(false)
+  }
+
   if (!editing) {
     return (
-      <div className="flex items-center gap-1.5">
-        <span className="font-mono text-sm font-bold">{currentTime}</span>
-        <button
-          onClick={() => { setValue(currentTime); setEditing(true) }}
-          className="p-0.5 text-slate-300 hover:text-blue-500 transition-colors"
-          title="Editar hora"
-        >
-          <Pencil size={11} />
-        </button>
-      </div>
+      <button
+        onClick={() => { setValue(mov.time); setEditing(true) }}
+        title="Clic para editar"
+        className="group relative font-mono text-xs font-bold text-slate-800 hover:text-blue-700 px-1.5 py-0.5 rounded hover:bg-blue-50 transition-colors cursor-pointer"
+      >
+        {mov.time}
+        {mov.editedAt && (
+          <span className="absolute -top-1 -right-1 w-1.5 h-1.5 rounded-full bg-amber-400" title="Editado manualmente" />
+        )}
+      </button>
     )
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <span className="flex items-center gap-0.5">
       <input
         type="time"
         value={value}
         onChange={e => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
         disabled={saving}
-        className="h-7 px-2 rounded-lg border border-blue-400 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 w-24"
         autoFocus
+        className="h-6 px-1.5 rounded border border-blue-400 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 w-20"
       />
-      <button
-        onClick={handleSave}
-        disabled={saving}
-        className="p-1 text-emerald-600 hover:text-emerald-700 disabled:opacity-40"
-        title="Guardar"
-      >
-        <Check size={13} />
+      <button onClick={handleSave} disabled={saving} className="p-0.5 text-emerald-600 hover:text-emerald-700 disabled:opacity-40" title="Guardar">
+        <Check size={12} />
       </button>
-      <button
-        onClick={() => setEditing(false)}
-        disabled={saving}
-        className="p-1 text-slate-400 hover:text-slate-600"
-        title="Cancelar"
-      >
-        <Ban size={13} />
+      <button onClick={() => setEditing(false)} disabled={saving} className="p-0.5 text-slate-400 hover:text-slate-600" title="Cancelar">
+        <Ban size={12} />
       </button>
-    </div>
+    </span>
+  )
+}
+
+function InlineCreate({
+  personId,
+  dateKey,
+  movement,
+  onCreated,
+  onError,
+}: {
+  personId: string
+  dateKey: string
+  movement: 'ENTRY' | 'EXIT'
+  onCreated: (newTime: string, newId: string) => void
+  onError: (msg: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const handleSave = async () => {
+    setSaving(true)
+    const result = await createAccessRecordForDate(personId, movement, dateKey, value)
+    setSaving(false)
+    if (result.success && result.id) {
+      onCreated(value, result.id)
+      setEditing(false)
+    } else {
+      onError(result.error ?? 'Error al crear registro')
+    }
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') handleSave()
+    if (e.key === 'Escape') setEditing(false)
+  }
+
+  if (!editing) {
+    return (
+      <button
+        onClick={() => setEditing(true)}
+        title={`Agregar ${movement === 'ENTRY' ? 'entrada' : 'salida'}`}
+        className="font-mono text-xs text-slate-300 hover:text-blue-500 hover:bg-blue-50 px-1.5 py-0.5 rounded transition-colors cursor-pointer"
+      >
+        —
+      </button>
+    )
+  }
+
+  return (
+    <span className="flex items-center gap-0.5">
+      <input
+        type="time"
+        value={value}
+        onChange={e => setValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={saving}
+        autoFocus
+        className="h-6 px-1.5 rounded border border-blue-400 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500 w-20"
+      />
+      <button onClick={handleSave} disabled={saving || !value} className="p-0.5 text-emerald-600 hover:text-emerald-700 disabled:opacity-40" title="Guardar">
+        <Check size={12} />
+      </button>
+      <button onClick={() => setEditing(false)} disabled={saving} className="p-0.5 text-slate-400 hover:text-slate-600" title="Cancelar">
+        <Ban size={12} />
+      </button>
+    </span>
   )
 }
 
@@ -129,6 +207,7 @@ export default function AdminRegistrosPage() {
   const [page, setPage] = useState(1)
   const [types, setTypes] = useState<PersonTypeOption[]>([])
   const [loading, setLoading] = useState(true)
+  const [editError, setEditError] = useState<string | null>(null)
 
   const [searchInput, setSearchInput] = useState('')
   const [searchApplied, setSearchApplied] = useState('')
@@ -137,10 +216,6 @@ export default function AdminRegistrosPage() {
   const [datePreset, setDatePreset] = useState('hoy')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-
-  const [selectedDetails, setSelectedDetails] = useState<DailyAccessRecordRow | null>(null)
-  const [detailMovements, setDetailMovements] = useState(selectedDetails?.movements ?? [])
-  const [editError, setEditError] = useState<string | null>(null)
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -173,11 +248,6 @@ export default function AdminRegistrosPage() {
   useEffect(() => { getPersonTypes().then(setTypes) }, [])
   useEffect(() => { load(searchApplied, page) }, [load, searchApplied, page])
 
-  useEffect(() => {
-    setDetailMovements(selectedDetails?.movements ?? [])
-    setEditError(null)
-  }, [selectedDetails])
-
   const handleSearchChange = (value: string) => {
     setSearchInput(value)
     if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -186,13 +256,51 @@ export default function AdminRegistrosPage() {
 
   const handlePresetChange = (preset: string) => { setDatePreset(preset); setPage(1) }
 
-  const handleTimeSaved = (movId: string, newTime: string) => {
-    setDetailMovements(prev =>
-      prev.map(m => m.id === movId ? { ...m, time: newTime, editedAt: new Date().toISOString() } : m)
-    )
+  const handleTimeSaved = (rowId: string, movId: string, newTime: string) => {
     setEditError(null)
+    setRows(prev => prev.map(row => {
+      if (row.id !== rowId) return row
+      const updatedMovs = row.movements.map(m =>
+        m.id === movId ? { ...m, time: newTime, editedAt: new Date().toISOString() } : m
+      )
 
-    load(searchApplied, page)
+      const firstEntry = updatedMovs.find(m => m.movement === 'ENTRY')
+      const lastExit = [...updatedMovs].filter(m => m.movement === 'EXIT').pop()
+      return {
+        ...row,
+        movements: updatedMovs,
+        firstEntryTime: firstEntry?.time ?? row.firstEntryTime,
+        lastExitTime: lastExit?.time ?? row.lastExitTime,
+      }
+    }))
+  }
+
+  const handleMovCreated = (
+    rowId: string,
+    movement: 'ENTRY' | 'EXIT',
+    newTime: string,
+    newId: string,
+  ) => {
+    setEditError(null)
+    setRows(prev => prev.map(row => {
+      if (row.id !== rowId) return row
+      const newMov: DailyMovementItem = {
+        id: newId,
+        movement,
+        time: newTime,
+        timestamp: new Date().toISOString(),
+        editedAt: new Date().toISOString(),
+      }
+      const updatedMovs = [...row.movements, newMov].sort((a, b) => a.time.localeCompare(b.time))
+      const firstEntry = updatedMovs.find(m => m.movement === 'ENTRY')
+      const lastExit = [...updatedMovs].filter(m => m.movement === 'EXIT').pop()
+      return {
+        ...row,
+        movements: updatedMovs,
+        firstEntryTime: firstEntry?.time ?? row.firstEntryTime,
+        lastExitTime: lastExit?.time ?? row.lastExitTime,
+      }
+    }))
   }
 
   return (
@@ -206,7 +314,6 @@ export default function AdminRegistrosPage() {
         </div>
       </div>
 
-      {/* Filtros */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4 flex flex-wrap items-end gap-3 shadow-sm">
         <div className="flex-1 min-w-[220px]">
           <label className="block text-xs font-semibold text-slate-500 mb-1 uppercase tracking-widest">Buscar persona</label>
@@ -276,7 +383,19 @@ export default function AdminRegistrosPage() {
         </div>
       </div>
 
-      {/* Tabla */}
+      {editError && (
+        <div className="flex items-center gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 mb-3">
+          <AlertCircle size={13} className="flex-shrink-0" />
+          {editError}
+          <button onClick={() => setEditError(null)} className="ml-auto text-rose-400 hover:text-rose-600"><X size={12} /></button>
+        </div>
+      )}
+
+      <p className="text-xs text-slate-400 mb-2 px-1">
+        💡 Haz clic en una hora (o en <span className="font-mono">—</span>) para editarla.
+        Solo se pueden modificar registros de días anteriores a hoy.
+      </p>
+
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
         {loading ? (
           <div className="py-20 text-center"><span className="inline-block w-7 h-7 border-2 border-blue-200 border-t-blue-700 rounded-full animate-spin" /></div>
@@ -293,29 +412,79 @@ export default function AdminRegistrosPage() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Salida</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Total</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Estado</th>
-                <th className="px-3 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {rows.map(row => (
-                <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                  <td className="px-5 py-3.5 font-semibold text-slate-900">{row.personName}</td>
-                  <td className="px-5 py-3.5"><span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${getTypeColor(row.personTypeSlug)}`}>{row.personTypeName}</span></td>
-                  <td className="px-5 py-3.5 text-xs text-slate-600">{row.formattedDate}</td>
-                  <td className="px-5 py-3.5 font-mono text-xs">{row.firstEntryTime || '—'}</td>
-                  <td className="px-5 py-3.5 font-mono text-xs">{row.lastExitTime || '—'}</td>
-                  <td className="px-5 py-3.5 font-mono text-xs font-bold">{row.formattedTotalHours}</td>
-                  <td className="px-5 py-3.5">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : row.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' : 'bg-rose-100 text-rose-800'}`}>
-                      {row.status === 'COMPLETED' ? <CheckCircle2 size={12} /> : row.status === 'IN_PROGRESS' ? <Timer size={12} /> : <AlertCircle size={12} />}
-                      {row.status === 'COMPLETED' ? 'Completo' : row.status === 'IN_PROGRESS' ? 'En curso' : 'Inconsistente'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-3.5 text-right">
-                    <button onClick={() => setSelectedDetails(row)} className="text-slate-400 hover:text-slate-600 p-1"><ListOrdered size={14} /></button>
-                  </td>
-                </tr>
-              ))}
+              {rows.map(row => {
+                const editable = !isToday(row.dateKey)
+
+                const entryMov = row.movements.find(m => m.movement === 'ENTRY')
+                const exitMov = [...row.movements].reverse().find(m => m.movement === 'EXIT')
+
+                return (
+                  <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-5 py-3.5 font-semibold text-slate-900">{row.personName}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${getTypeColor(row.personTypeSlug)}`}>
+                        {row.personTypeName}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5 text-xs text-slate-600">{row.formattedDate}</td>
+
+                    <td className="px-5 py-3.5">
+                      {editable ? (
+                        entryMov ? (
+                          <InlineTime
+                            mov={entryMov}
+                            onSaved={(id, t) => handleTimeSaved(row.id, id, t)}
+                            onError={setEditError}
+                          />
+                        ) : (
+                          <InlineCreate
+                            personId={row.personId}
+                            dateKey={row.dateKey}
+                            movement="ENTRY"
+                            onCreated={(t, id) => handleMovCreated(row.id, 'ENTRY', t, id)}
+                            onError={setEditError}
+                          />
+                        )
+                      ) : (
+                        <span className="font-mono text-xs text-slate-800">{row.firstEntryTime || '—'}</span>
+                      )}
+                    </td>
+
+                    <td className="px-5 py-3.5">
+                      {editable ? (
+                        exitMov ? (
+                          <InlineTime
+                            mov={exitMov}
+                            onSaved={(id, t) => handleTimeSaved(row.id, id, t)}
+                            onError={setEditError}
+                          />
+                        ) : (
+                          <InlineCreate
+                            personId={row.personId}
+                            dateKey={row.dateKey}
+                            movement="EXIT"
+                            onCreated={(t, id) => handleMovCreated(row.id, 'EXIT', t, id)}
+                            onError={setEditError}
+                          />
+                        )
+                      ) : (
+                        <span className="font-mono text-xs text-slate-800">{row.lastExitTime || '—'}</span>
+                      )}
+                    </td>
+
+                    <td className="px-5 py-3.5 font-mono text-xs font-bold text-slate-700">{row.formattedTotalHours}</td>
+                    <td className="px-5 py-3.5">
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${row.status === 'COMPLETED' ? 'bg-emerald-100 text-emerald-800' : row.status === 'IN_PROGRESS' ? 'bg-blue-100 text-blue-800' : 'bg-rose-100 text-rose-800'}`}>
+                        {row.status === 'COMPLETED' ? <CheckCircle2 size={12} /> : row.status === 'IN_PROGRESS' ? <Timer size={12} /> : <AlertCircle size={12} />}
+                        {row.status === 'COMPLETED' ? 'Completo' : row.status === 'IN_PROGRESS' ? 'En curso' : 'Inconsistente'}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
@@ -330,59 +499,6 @@ export default function AdminRegistrosPage() {
           </div>
         )}
       </div>
-
-      {/* Panel de detalles con edición inline */}
-      {selectedDetails && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6">
-            <div className="flex items-start justify-between mb-1">
-              <div>
-                <h2 className="text-lg font-bold text-slate-900">{selectedDetails.personName}</h2>
-                <p className="text-xs text-slate-500">{selectedDetails.formattedDate}</p>
-              </div>
-              <span className="text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded-lg font-mono">{selectedDetails.formattedTotalHours}</span>
-            </div>
-
-            <p className="text-xs text-slate-400 mb-4 flex items-center gap-1">
-              <PencilLine size={11} />
-              Haz clic en el lápiz junto a cada hora para editarla.
-            </p>
-
-            {editError && (
-              <div className="flex items-center gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 mb-3">
-                <AlertCircle size={13} className="flex-shrink-0" />
-                {editError}
-              </div>
-            )}
-
-            <div className="space-y-2 mb-6">
-              {detailMovements.map((m, i) => (
-                <div key={m.id} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${m.movement === 'ENTRY' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                      {m.movement === 'ENTRY' ? 'Entrada' : 'Salida'}
-                    </span>
-                    <span className="text-xs text-slate-400">#{i + 1}</span>
-                    {m.editedAt && (
-                      <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded font-semibold">Editado</span>
-                    )}
-                  </div>
-                  <EditableTime
-                    recordId={m.id}
-                    currentTime={m.time}
-                    onSaved={(newTime) => handleTimeSaved(m.id, newTime)}
-                    onError={setEditError}
-                  />
-                </div>
-              ))}
-            </div>
-
-            <button onClick={() => setSelectedDetails(null)} className="w-full py-2.5 bg-slate-900 text-white text-sm font-semibold rounded-xl hover:bg-slate-800 transition-colors">
-              Cerrar
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
