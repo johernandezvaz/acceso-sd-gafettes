@@ -93,13 +93,14 @@ model Person {
 // ACCESS RECORDS — registros de entrada/salida de personal
 // ─────────────────────────────────────────────────────────────
 model AccessRecord {
-  id        String     @id @default(cuid())
-  personId  String     @map("person_id")
+  id        String    @id @default(cuid())
+  personId  String    @map("person_id")
   movement  Movement
-  timestamp DateTime   @default(now())
-  createdAt DateTime   @default(now()) @map("created_at")
+  timestamp DateTime  @default(now())
+  editedAt  DateTime? @map("edited_at")   // null = original; not null = fue editado manualmente
+  createdAt DateTime  @default(now()) @map("created_at")
 
-  person    Person     @relation(fields: [personId], references: [id])
+  person    Person    @relation(fields: [personId], references: [id])
 
   @@index([personId])
   @@index([timestamp])

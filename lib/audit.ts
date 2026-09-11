@@ -23,6 +23,8 @@ export type AuditAction =
   | 'RESET_TEMP_PASSWORD'
   | 'CHANGE_PASSWORD'
   | 'LOGIN'
+  | 'EDIT_ACCESS_RECORD'
+  | 'EDIT_REPORT_AMOUNT'
 
 export async function logAction(
   adminUserId: string,

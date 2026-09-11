@@ -2,6 +2,9 @@
 
 import { prisma } from '@/lib/db'
 import { Movement } from '@prisma/client'
+import { requireAuth } from '@/lib/session'
+import { logAction } from '@/lib/audit'
+
 export async function registerAccess(
   personId: string,
   movement: 'ENTRY' | 'EXIT'
@@ -32,11 +35,91 @@ export async function registerAccess(
   }
 }
 
+export async function updateAccessRecordTimestamp(
+  recordId: string,
+  newTime: string
+): Promise<{ success: boolean; error?: string }> {
+  const session = await requireAuth()
+
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(newTime)) {
+    return { success: false, error: 'Formato de hora inválido. Use HH:mm (ej. 08:30)' }
+  }
+
+  const record = await prisma.accessRecord.findUnique({ where: { id: recordId } })
+  if (!record) {
+    return { success: false, error: 'Registro no encontrado' }
+  }
+
+  const [hh, mm] = newTime.split(':').map(Number)
+  const newTimestamp = new Date(record.timestamp)
+  newTimestamp.setHours(hh, mm, 0, 0)
+
+  if (record.movement === 'EXIT') {
+    const dateStr = record.timestamp.toISOString().split('T')[0]
+    const dayStart = new Date(`${dateStr}T00:00:00.000`)
+    const dayEnd = new Date(`${dateStr}T23:59:59.999`)
+
+    const lastEntry = await prisma.accessRecord.findFirst({
+      where: {
+        personId: record.personId,
+        movement: 'ENTRY',
+        timestamp: { gte: dayStart, lte: dayEnd },
+      },
+      orderBy: { timestamp: 'desc' },
+    })
+
+    if (lastEntry && newTimestamp <= lastEntry.timestamp) {
+      return { success: false, error: 'La hora de salida no puede ser anterior o igual a la hora de entrada' }
+    }
+  }
+
+  if (record.movement === 'ENTRY') {
+    const dateStr = record.timestamp.toISOString().split('T')[0]
+    const dayStart = new Date(`${dateStr}T00:00:00.000`)
+    const dayEnd = new Date(`${dateStr}T23:59:59.999`)
+
+    const nextExit = await prisma.accessRecord.findFirst({
+      where: {
+        personId: record.personId,
+        movement: 'EXIT',
+        timestamp: { gte: dayStart, lte: dayEnd },
+      },
+      orderBy: { timestamp: 'asc' },
+    })
+
+    if (nextExit && newTimestamp >= nextExit.timestamp) {
+      return { success: false, error: 'La hora de entrada no puede ser posterior o igual a la hora de salida registrada' }
+    }
+  }
+
+  const before = {
+    timestamp: record.timestamp.toISOString(),
+    movement: record.movement,
+  }
+  const after = { timestamp: newTimestamp.toISOString() }
+
+  await prisma.accessRecord.update({
+    where: { id: recordId },
+    data: { timestamp: newTimestamp, editedAt: new Date() },
+  })
+
+  await logAction(session.adminId, 'EDIT_ACCESS_RECORD', 'AccessRecord', recordId, {
+    before,
+    after,
+    personId: record.personId,
+    editedBy: session.email,
+  })
+
+  return { success: true }
+}
+
+
 export interface DailyMovementItem {
   id: string
   movement: 'ENTRY' | 'EXIT'
   time: string
   timestamp: string
+  editedAt: string | null
 }
 
 export interface DailyAccessRecordRow {
@@ -116,7 +199,6 @@ export async function getDailyAccessRecords(filters: {
       }
       : {}
 
-  // Consulta de movimientos relevantes
   const rawRecords = await prisma.accessRecord.findMany({
     where: {
       ...dateFilter,
@@ -133,7 +215,6 @@ export async function getDailyAccessRecords(filters: {
     orderBy: { timestamp: 'asc' },
   })
 
-  // Agrupación en servidor por Persona + Día
   const groupedMap = new Map<string, {
     person: {
       id: string
@@ -167,7 +248,6 @@ export async function getDailyAccessRecords(filters: {
     groupedMap.get(groupKey)!.records.push(r)
   }
 
-  // Procesar cada grupo para resolver entrada/salida y calcular horas trabajadas
   const allRows: DailyAccessRecordRow[] = []
 
   for (const [groupKey, group] of groupedMap.entries()) {
@@ -190,6 +270,7 @@ export async function getDailyAccessRecords(filters: {
         movement: item.movement,
         time: timeStr,
         timestamp: itemDate.toISOString(),
+        editedAt: item.editedAt ? item.editedAt.toISOString() : null,
       })
 
       if (item.movement === 'ENTRY') {

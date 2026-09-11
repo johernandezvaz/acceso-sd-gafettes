@@ -1,523 +1,106 @@
-# Corrección definitiva — Brother QL-810W imprime blanco
+# Prompt: Edición inline de horas + módulo de reportes de pago
 
-Tenemos un problema confirmado en el flujo de impresión.
+## Contexto
 
-## Estado actual
+Plataforma existente de control de asistencia que genera un documento "Solicitud de Transferencia" (ver plantilla adjunta) usado actualmente para pagar becas de prácticas profesionales. Se requieren dos cambios mayores.
 
-La Brother QL-810W:
-
-* recibe correctamente el trabajo;
-* tiene comunicación TCP funcionando;
-* reconoce correctamente el soporte DK-4205;
-* imprime la longitud correcta;
-* realiza el corte correctamente;
-
-PERO:
-
-**el diseño sale completamente blanco.**
-
-## Causa probable ya identificada
-
-`generateBrotherRasterJob()` recibe opcionalmente:
-
-```ts
-customBitmapBuffer?: Uint8Array
-```
-
-y el contenido negro del Raster solamente se genera cuando:
-
-```ts
-if (customBitmapBuffer) {
-   ...
-}
-```
-
-Actualmente `sendToBrotherNetworkPrinter()` llama:
-
-```ts
-const binaryJob = generateBrotherRasterJob(data, options);
-```
-
-sin proporcionar `customBitmapBuffer`.
-
-Por lo tanto, el Raster se está generando sin píxeles negros.
-
-Esto debe corregirse.
+Antes de escribir código: **inspeccionar el esquema actual** de la base de datos y los componentes existentes relacionados con registros de entrada/salida, roles de usuario y generación de PDF. No asumir que estas piezas no existen — reutilizar lo que ya haya.
 
 ---
 
-# OBJETIVO
+## CAMBIO 1 — Edición inline de horas (rol admin)
 
-Conectar correctamente el diseño visual del gafete con la generación del Brother Raster.
+**Objetivo:** un usuario con rol admin debe poder corregir directamente, desde la tabla/vista de asistencia, cualquier campo relacionado con hora de entrada u hora de salida de un empleado, para los casos en que el registro biométrico/checador no se generó.
 
-El flujo debe ser:
-
-```text
-GafeteVisitante
-        ↓
-Diseño visual
-        ↓
-Bitmap 1bpp
-        ↓
-customBitmapBuffer
-        ↓
-generateBrotherRasterJob()
-        ↓
-Brother Raster Command Stream
-        ↓
-TCP 10.33.31.94:9100
-        ↓
-Brother QL-810W
-```
-
-NO queremos simplemente enviar el componente HTML a la impresora.
-
-La QL-810W necesita recibir el bitmap convertido al formato Brother Raster.
+**Requisitos:**
+- Edición inline (sin modal separado si la UX actual lo permite; si no, evaluar la opción más simple compatible con la arquitectura existente).
+- Solo el rol admin puede editar. Verificar en el proyecto si ese rol ya existe; si no, señalarlo como bloqueante antes de continuar.
+- **Auditoría obligatoria**: cada edición debe registrar valor anterior, valor nuevo, usuario que hizo el cambio, y timestamp del cambio. Esto es un requisito no negociable por tratarse de datos que alimentan pagos.
+- Integrar este registro en el **sistema de logs ya existente en la plataforma** (no crear un sistema de logs paralelo). Verificar el mecanismo de logging actual y reutilizarlo.
+- La visibilidad/monitoreo de esta sección específica de logs (ediciones de horas e importes) debe quedar restringida al rol **superadmin** únicamente — el rol admin puede editar, pero no necesariamente puede auditar sus propios cambios ni los de otros admins. Confirmar si el rol superadmin ya existe en el sistema de permisos; si no, señalarlo como bloqueante.
+- Validación: no permitir que hora de salida sea anterior a hora de entrada; no permitir horas fuera de un rango razonable (ej. 00:00–23:59).
 
 ---
 
-# IMPORTANTE: NO modificar lo que ya funciona
+## CAMBIO 2 — Módulo de reportes (nueva pestaña)
 
-NO modificar:
+Hay **dos tipos de reporte con plantillas distintas**. No compartir la misma plantilla entre ambos.
 
-* IP 10.33.31.94
-* Puerto 9100
-* comunicación TCP
-* endpoint `/api/print/brother`
-* tipo de soporte
-* DK-4205
-* Continuous Length
-* media width = 62 mm
-* `mediaInfo[3] = 0x8E`
-* `mediaInfo[4] = 0x0A`
-* `mediaInfo[5] = 62`
-* `mediaInfo[6] = 0`
-* comando de corte que ya funciona
-* longitud física que ya funciona
+### 2.1 Reporte de practicantes (pago por hora)
 
-La impresora ya acepta el trabajo y corta correctamente.
+**Periodo de cálculo:** quincenal fijo — del 1 al 15, y del 16 al último día de cada mes (el "último día" varía según el mes, calcularlo dinámicamente, no hardcodear 30/31).
 
-El problema ahora es exclusivamente:
+**Flujo:**
+1. El usuario debe seleccionar primero un practicante específico. Sin selección, no se muestran cálculos de horas ni de pago (deshabilitar la sección de cálculo hasta que haya selección).
+2. Con el practicante y el rango de quincena seleccionados, calcular horas trabajadas por día usando los registros de entrada/salida (incluyendo cualquier corrección hecha vía Cambio 1).
 
-**el bitmap que llega al Raster está vacío/no contiene los píxeles del diseño.**
+**Regla de redondeo (CONFIRMADA):**
+- Si un día se trabajó entre X y X.49 horas, redondear hacia abajo a X; si se trabajó X.5 horas o más, redondear hacia arriba a X+1. Esta lógica aplica de manera uniforme a **cualquier** número de horas del día, no solo al límite 7/8 — incluyendo casos borde poco frecuentes (ej. jornadas muy cortas o registros parciales).
+- Implementar como función aislada `redondearHoras(horasDecimal)` con pruebas unitarias que cubran múltiples rangos de hora (no solo 7/8), para poder ajustarla fácilmente si el negocio la corrige más adelante.
 
----
+**Cálculo de pago:**
+- Tarifa por hora: aplica **únicamente a practicantes**. Valor por defecto $45 MXN.
+- La tarifa es **configurable por reporte** en el momento de generarlo — no es un valor global del sistema ni un valor fijo por practicante individual. Cada vez que se genera un reporte, el usuario puede ajustar la tarifa usada para ese cálculo específico.
+- Importe total = suma de horas redondeadas de todos los días del periodo × tarifa por hora.
+- Generar también el importe en letras (formato "SON [CANTIDAD EN LETRAS] PESOS XX/100 M.N.") de forma dinámica — no como texto fijo.
 
-# GEOMETRÍA
+**Campos del documento (rellenables):**
+- Beneficiario (texto libre)
+- Importe (número y letras, calculado automáticamente por defecto). **Puede ser sobreescrito manualmente** en caso de mal cálculo o confusión, pero cualquier sobreescritura debe quedar registrada en los logs del sistema (valor calculado original, valor final usado, usuario, timestamp) — mismo mecanismo de auditoría que el Cambio 1.
+- Solicitado por (texto libre)
+- Autorizado por (texto libre)
+- Concepto (texto libre, default sugerido "BECA PRACTICAS PROFESIONALES")
+- Alumno (automático, según practicante seleccionado)
+- Desglose de horas por día del periodo (fecha, hora entrada, hora salida, horas redondeadas del día)
+- Total de horas del periodo
 
-Recordar la diferencia:
+**Exportación:**
+- PDF, una sola hoja.
+- Debe incluir el logo `safe-demo_logo-blc-Photoroom.png` junto con el siguiente encabezado de empresa (texto obligatorio, no modificar redacción):
+  ```
+  DEMO TECHNIC S. DE R.L. DE C.V.
+  AVE LUIS G. URBINA 11527 COMPLEJO INDUSTRIAL CHIHUAHUA
+  C.P 31109 TEL(614) 442-21-00 FAX. (614) 442-21-09
 
-## Soporte físico
+  SOLICITUD DE TRANSFERENCIA
+  ```
+- Este título ("SOLICITUD DE TRANSFERENCIA") aplica a este reporte porque es, efectivamente, una solicitud de transferencia de pago.
+- Mejorar estéticamente respecto a la plantilla actual (adjunta como referencia) — tipografía, espaciado y jerarquía visual más cuidados, manteniendo todos los campos obligatorios.
+- Si el periodo tiene tantos días que no cabe cómodamente en una hoja con buena legibilidad, priorizar legibilidad sobre forzar que quepa todo — definir un tamaño de fuente mínimo aceptable y, si aun así no cabe, usar una segunda página solo para el desglose (no para el encabezado/firma).
 
-```text
-62 mm de ancho
-DK-4205 continuous
-```
+### 2.2 Reporte general (limpieza, transportistas, seguridad, etc.)
 
-## Diseño útil
-
-```text
-52 mm de ancho
-```
-
-## Longitud de corte
-
-```text
-54 mm
-```
-
-NO interpretar 52 × 54 mm como el tamaño del soporte.
-
-El Raster debe continuar trabajando sobre el ancho físico que requiere la QL-810W.
-
----
-
-# TAREA 1 — Encontrar dónde se genera actualmente el bitmap
-
-Buscar en todo el proyecto:
-
-```text
-customBitmapBuffer
-```
-
-y también:
-
-```text
-canvas
-getImageData
-ImageData
-Uint8Array
-1bpp
-bitmap
-raster
-```
-
-Determinar si ya existe alguna función que convierta el diseño del gafete a bitmap 1bpp.
-
-Si existe:
-
-* reutilizarla;
-* no crear otra implementación;
-* conectar su resultado con `generateBrotherRasterJob()`.
-
-Si NO existe:
-
-crear una función pequeña y aislada para convertir el diseño del gafete a un bitmap 1bpp.
+**Diferencias clave respecto al 2.1 — NO es la misma plantilla:**
+- Mismo periodo quincenal (1–15 / 16–fin de mes).
+- No incluye Beneficiario, Importe, ni cálculo de pago — es un reporte informativo de horas, no una solicitud de transferencia.
+- Incluye múltiples empleados en un mismo reporte (no se selecciona uno solo).
+- Para cada empleado: total de horas del periodo + su propio desglose de horas, presentado de forma claramente separada por empleado para evitar confusión entre personas.
+- Debe incluir el mismo logo `safe-demo_logo-blc-Photoroom.png`, junto con el mismo encabezado de empresa que el reporte 2.1:
+  ```
+  DEMO TECHNIC S. DE R.L. DE C.V.
+  AVE LUIS G. URBINA 11527 COMPLEJO INDUSTRIAL CHIHUAHUA
+  C.P 31109 TEL(614) 442-21-00 FAX. (614) 442-21-09
+  ```
+  **PENDIENTE DE CONFIRMAR:** el título "SOLICITUD DE TRANSFERENCIA" no aplica literalmente a este reporte, ya que no es una solicitud de pago (no tiene beneficiario ni importe). Título sugerido por defecto: "REPORTE DE HORAS" (indicando la quincena correspondiente). Confirmar con negocio si debe usarse este título genérico o si de todas formas debe decir "SOLICITUD DE TRANSFERENCIA" aunque no aplique técnicamente.
+- Igual exportable a PDF.
+- **Manejo de escala (CONFIRMADO):** la paginación a múltiples hojas es aceptable si el número de empleados/días no permite mantener buena legibilidad en una sola página. Priorizar legibilidad sobre forzar todo en una hoja. Mantener el logo y encabezado consistentes en cada página adicional.
 
 ---
 
-# TAREA 2 — El diseño visual debe convertirse a bitmap
+## Regla general — manejo de ausencias
 
-El diseño actual está en:
-
-```text
-components/GafeteVisitante.tsx
-```
-
-Ese componente contiene:
-
-* logo;
-* VISITANTE;
-* nombre;
-* empresa;
-* folio;
-* visita A;
-* motivo;
-* identificación;
-* fecha;
-* hora;
-* QR.
-
-El HTML/React NO puede enviarse directamente a la Brother.
-
-Necesitamos rasterizar ese diseño.
-
-La solución debe producir:
-
-```text
-Uint8Array
-```
-
-donde:
-
-```text
-1 = píxel negro
-0 = píxel blanco
-```
-
-en formato 1bpp MSB-first, compatible con `generateBrotherRasterJob()`.
+**CONFIRMADO:** un día sin ningún registro de entrada/salida cuenta como **0 horas** en el desglose y en el total del periodo — no se excluye de la tabla, simplemente aparece con 0 horas trabajadas (y, por lo tanto, sin pago para ese día). Esto aplica tanto al reporte de practicantes (2.1) como al general (2.2).
 
 ---
 
-# TAREA 3 — NO utilizar una captura visual del navegador si puede evitarse
-
-Antes de agregar una dependencia como:
-
-* html2canvas
-* puppeteer
-* playwright
-* chromium
-* screenshot tools
-
-revisar si el proyecto ya tiene una forma de generar el bitmap.
-
-Preferir una implementación determinística para impresión.
-
-Si el diseño visual actual necesita ser rasterizado desde React/HTML, evaluar la solución mínima compatible con la arquitectura existente.
-
-NO introducir dependencias pesadas innecesariamente.
-
----
-
-# TAREA 4 — Validar las dimensiones del bitmap
-
-El bitmap debe representar:
-
-```text
-Ancho útil: 52 mm
-Longitud: 54 mm
-Resolución: 300 DPI
-```
-
-Pero recordar:
-
-```text
-MEDIA WIDTH = 62 mm
-```
-
-El diseño de 52 mm debe posicionarse dentro del ancho físico del Raster.
-
-No reemplazar el ancho físico de 62 mm por 52 mm.
-
----
-
-# TAREA 5 — Verificar el problema con una prueba de diagnóstico
-
-Antes de conectar el diseño completo, realizar una prueba temporal.
-
-Crear un bitmap de prueba con:
-
-* un rectángulo negro claramente visible;
-* ocupando aproximadamente el área útil de 52 × 54 mm;
-* centrado dentro del ancho físico de 62 mm.
-
-Enviar ese bitmap a:
-
-```text
-generateBrotherRasterJob()
-```
-
-Si el rectángulo aparece físicamente:
-
-```text
-Raster ✅
-TCP ✅
-Soporte ✅
-Bitmap → Raster ✅
-```
-
-entonces conectar el diseño real.
-
-NO dejar el rectángulo de prueba en producción.
-
----
-
-# TAREA 6 — Validar el bitmap real
-
-Antes de enviar el Raster, registrar temporalmente:
-
-```text
-bitmap width
-bitmap height
-bitmap length
-black pixel count
-```
-
-Queremos comprobar que:
-
-```text
-black pixel count > 0
-```
-
-Si:
-
-```text
-black pixel count = 0
-```
-
-la conversión del diseño sigue fallando.
-
----
-
-# TAREA 7 — Mantener el formato esperado por generateBrotherRasterJob()
-
-Actualmente la función hace:
-
-```ts
-const bytesPerBadgeRow = Math.ceil(dims.widthDots / 8);
-```
-
-y luego interpreta el buffer como:
-
-```text
-1 bit por píxel
-MSB first
-```
-
-No cambiar esta convención sin necesidad.
-
-Si el bitmap generado utiliza otra convención, convertirlo antes de pasarlo a:
-
-```ts
-generateBrotherRasterJob()
-```
-
----
-
-# TAREA 8 — Revisar el flujo completo
-
-El resultado final debe ser:
-
-```text
-handleImprimirBrother()
-        ↓
-getVisitorData()
-        ↓
-generar/renderizar diseño
-        ↓
-crear bitmap 1bpp
-        ↓
-customBitmapBuffer
-        ↓
-sendToBrotherNetworkPrinter()
-        ↓
-generateBrotherRasterJob(data, options, customBitmapBuffer)
-        ↓
-Base64
-        ↓
-POST /api/print/brother
-        ↓
-TCP 10.33.31.94:9100
-        ↓
-Brother QL-810W
-```
-
-Actualmente el punto sospechoso es:
-
-```ts
-generateBrotherRasterJob(data, options)
-```
-
-que debe terminar recibiendo también el bitmap real:
-
-```ts
-generateBrotherRasterJob(
-    data,
-    options,
-    customBitmapBuffer
-)
-```
-
-Pero NO agregues simplemente un buffer vacío.
-
-Debe ser el bitmap real del diseño.
-
----
-
-# TAREA 9 — Mantener el diseño actual
-
-El diseño visual puede continuar modificándose independientemente del protocolo Brother.
-
-Mantener:
-
-* logo;
-* nombre;
-* empresa;
-* folio;
-* visita;
-* motivo;
-* identificación;
-* fecha;
-* hora;
-* QR.
-
-El rediseño visual debe reflejarse en el bitmap que se imprime.
-
-IMPORTANTE:
-
-Si el diseño cambia en `GafeteVisitante.tsx`, el bitmap de impresión debe reflejar ese cambio.
-
-No queremos tener:
-
-```text
-Pantalla → diseño A
-Impresora → diseño B
-```
-
-Queremos:
-
-```text
-Pantalla → diseño actual
-Impresora → mismo diseño actual
-```
-
----
-
-# TAREA 10 — Blanco y negro
-
-El bitmap final debe ser estrictamente 1bpp:
-
-```text
-#000000
-#FFFFFF
-```
-
-No utilizar:
-
-* grayscale;
-* antialiasing gris;
-* colores;
-* transparencias.
-
-Si la rasterización produce grises, convertirlos mediante threshold a blanco/negro.
-
----
-
-# CRITERIO DE ÉXITO
-
-La prueba debe terminar mostrando:
-
-```text
-┌──────────────────────────────┐
-│                              │
-│       DISEÑO DEL GAFETE      │
-│                              │
-│     Nombre                  │
-│     Empresa                 │
-│     Folio                   │
-│     Información             │
-│     QR                      │
-│                              │
-└──────────────────────────────┘
-```
-
-en la cinta DK-4205.
-
-La impresora debe:
-
-* aceptar el trabajo;
-* imprimir el diseño;
-* cortar correctamente a la longitud configurada.
-
----
-
-# RESTRICCIONES
-
-NO:
-
-* Zebra;
-* ZPL;
-* window.print();
-* Chrome Print Dialog;
-* PDF;
-* Windows Print Spooler;
-* cambiar media width de 62 mm;
-* cambiar el tipo de soporte;
-* cambiar `0x8E`;
-* cambiar `0x0A`;
-* crear un segundo sistema de impresión;
-* introducir dependencias pesadas sin justificación.
-
-SÍ:
-
-* reutilizar `generateBrotherRasterJob()`;
-* proporcionar un `customBitmapBuffer` real;
-* conservar Brother Raster;
-* conservar TCP;
-* conservar DK-4205;
-* conservar media width = 62 mm.
-
----
-
-# VALIDACIÓN FINAL
-
-Ejecutar:
+## Validación final requerida
 
 1. Typecheck.
 2. Lint.
 3. Build.
-4. Prueba del bitmap.
-5. Verificar `black pixel count > 0`.
-6. Prueba real de impresión.
-7. Confirmar que el diseño aparece.
-8. Confirmar que el corte sigue funcionando.
+4. Prueba con un practicante con datos reales/de prueba, verificando que el redondeo y el importe calculado coincidan con un cálculo manual de control.
+5. Prueba del reporte general con al menos 3 empleados para verificar que el desglose no se confunda entre personas.
+6. Exportación real a PDF de ambos reportes, revisando que quepan legiblemente y que el logo aparezca correctamente.
+7. Confirmar que la edición inline de horas registra correctamente la auditoría (valor anterior, nuevo, usuario, timestamp).
 
-Al finalizar reportar únicamente:
-
-1. Causa raíz.
-2. Cómo se generó el bitmap.
-3. Archivos modificados.
-4. Resultado de typecheck/lint/build.
-5. Resultado de impresión física.
-
-No hacer refactors fuera de este problema.
+Reportar al finalizar: causa de cualquier decisión de diseño tomada por ambigüedad, archivos modificados, resultado de typecheck/lint/build, y capturas o descripción del PDF resultante de ambos reportes.

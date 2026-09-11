@@ -20,6 +20,9 @@ preview.png
 test/
 /test
 
+DOCUMENTATION.md
+prompt.md
+
 # testing
 /coverage
 # next.js

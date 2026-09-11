@@ -14,6 +14,7 @@ import {
   UserCog,
   ScrollText,
   Crown,
+  FileBarChart2,
 } from 'lucide-react'
 import { ROUTES, SYSTEM_NAME } from '@/lib/constants'
 
@@ -31,6 +32,7 @@ const baseNavItems = [
   { label: 'Registro de llaves', href: ROUTES.adminRegistroLlaves, icon: History },
   { label: 'Registros', href: ROUTES.adminRegistros, icon: ClipboardList },
   { label: 'Visitantes', href: ROUTES.adminVisitantes, icon: UserCheck },
+  { label: 'Reportes', href: ROUTES.adminReportes, icon: FileBarChart2 },
 ]
 
 const superAdminNavItems = [
