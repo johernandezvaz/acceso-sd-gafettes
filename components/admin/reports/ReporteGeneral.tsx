@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PDFDownloadLink } from '@react-pdf/renderer'
-import { FileDown, Users } from 'lucide-react'
+import { FileDown, Users, AlertCircle, X } from 'lucide-react'
 import {
   getPersonsForGeneralReport,
   getAccessRecordsForPeriodMultiple,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/reports/quincenal'
 import { getPersonTypes, type PersonTypeOption } from '@/app/actions/people'
 import { PdfGeneral, type PersonReportData } from '@/lib/reports/pdfGeneral'
+import { InlineTime, InlineCreate } from '@/components/admin/reports/InlineTimeEdit'
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -38,6 +39,7 @@ export default function ReporteGeneral() {
 
   const [reportData, setReportData] = useState<PersonReportData[]>([])
   const [loading, setLoading] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
   const [logoBase64, setLogoBase64] = useState<string | undefined>()
 
   useEffect(() => {
@@ -73,6 +75,36 @@ export default function ReporteGeneral() {
     setReportData(data)
     setLoading(false)
   }, [persons, year, month, quincena])
+
+  const handleTimeSaved = async (personId: string, id: string, newTime: string) => {
+    setEditError(null)
+    setReportData(prev => prev.map(pr => {
+      if (pr.person.id !== personId) return pr
+      const updatedDays = pr.days.map(d => {
+        if (d.entryId === id) return { ...d, entryTime: newTime, entryEditedAt: new Date().toISOString() }
+        if (d.exitId === id) return { ...d, exitTime: newTime, exitEditedAt: new Date().toISOString() }
+        return d
+      })
+      return { ...pr, days: updatedDays }
+    }))
+    await generateReport()
+  }
+
+  const handleMovCreated = async (personId: string, dateKey: string, movement: 'ENTRY' | 'EXIT', newTime: string, newId: string) => {
+    setEditError(null)
+    setReportData(prev => prev.map(pr => {
+      if (pr.person.id !== personId) return pr
+      const updatedDays = pr.days.map(d => {
+        if (d.dateKey === dateKey) {
+          if (movement === 'ENTRY') return { ...d, entryId: newId, entryTime: newTime, entryEditedAt: new Date().toISOString() }
+          return { ...d, exitId: newId, exitTime: newTime, exitEditedAt: new Date().toISOString() }
+        }
+        return d
+      })
+      return { ...pr, days: updatedDays }
+    }))
+    await generateReport()
+  }
 
   const pdfDoc = reportData.length > 0 ? (
     <PdfGeneral
@@ -139,8 +171,25 @@ export default function ReporteGeneral() {
         </div>
       </div>
 
+      {editError && (
+        <div className="flex items-center gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 shadow-sm">
+          <AlertCircle size={14} className="flex-shrink-0" />
+          <span>{editError}</span>
+          <button
+            onClick={() => setEditError(null)}
+            className="ml-auto text-rose-400 hover:text-rose-600 cursor-pointer"
+            title="Cerrar advertencia"
+          >
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
       {reportData.length > 0 && (
         <div className="space-y-4">
+          <p className="text-xs text-slate-400 px-1">
+            💡 Haz clic en una hora o en <span className="font-mono text-slate-500">—</span> para editar o registrar entrada/salida
+          </p>
           {reportData.map(pr => (
             <div key={pr.person.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3 bg-slate-800 flex items-center justify-between">
@@ -166,8 +215,44 @@ export default function ReporteGeneral() {
                   {pr.days.map((d, i) => (
                     <tr key={d.dateKey} className={i % 2 === 0 ? '' : 'bg-slate-50/60'}>
                       <td className="px-4 py-1.5 text-xs">{d.dateLabel}</td>
-                      <td className="px-4 py-1.5 text-xs font-mono text-center">{d.entryTime ?? '—'}</td>
-                      <td className="px-4 py-1.5 text-xs font-mono text-center">{d.exitTime ?? '—'}</td>
+                      <td className="px-4 py-1.5 text-xs font-mono text-center">
+                        {d.entryId && d.entryTime ? (
+                          <InlineTime
+                            id={d.entryId}
+                            time={d.entryTime}
+                            editedAt={d.entryEditedAt}
+                            onSaved={(id, t) => handleTimeSaved(pr.person.id, id, t)}
+                            onError={setEditError}
+                          />
+                        ) : (
+                          <InlineCreate
+                            personId={pr.person.id}
+                            dateKey={d.dateKey}
+                            movement="ENTRY"
+                            onCreated={(_dk, _mov, t, id) => handleMovCreated(pr.person.id, d.dateKey, 'ENTRY', t, id)}
+                            onError={setEditError}
+                          />
+                        )}
+                      </td>
+                      <td className="px-4 py-1.5 text-xs font-mono text-center">
+                        {d.exitId && d.exitTime ? (
+                          <InlineTime
+                            id={d.exitId}
+                            time={d.exitTime}
+                            editedAt={d.exitEditedAt}
+                            onSaved={(id, t) => handleTimeSaved(pr.person.id, id, t)}
+                            onError={setEditError}
+                          />
+                        ) : (
+                          <InlineCreate
+                            personId={pr.person.id}
+                            dateKey={d.dateKey}
+                            movement="EXIT"
+                            onCreated={(_dk, _mov, t, id) => handleMovCreated(pr.person.id, d.dateKey, 'EXIT', t, id)}
+                            onError={setEditError}
+                          />
+                        )}
+                      </td>
                       <td className="px-4 py-1.5 text-xs font-bold text-center">{d.horasRedondeadas}</td>
                     </tr>
                   ))}

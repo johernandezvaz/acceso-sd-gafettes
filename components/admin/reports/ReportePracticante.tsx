@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PDFDownloadLink } from '@react-pdf/renderer'
-import { FileDown, Calculator, AlertTriangle, User, Calendar } from 'lucide-react'
+import { FileDown, Calculator, AlertTriangle, User, Calendar, AlertCircle, X } from 'lucide-react'
 import {
   getActivePracticantes,
   getAccessRecordsForPeriod,
@@ -20,6 +20,7 @@ import {
 } from '@/lib/reports/quincenal'
 import { importeEnLetras } from '@/lib/reports/numberToWords'
 import { PdfPracticante } from '@/lib/reports/pdfPracticante'
+import { InlineTime, InlineCreate } from '@/components/admin/reports/InlineTimeEdit'
 
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
   'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
@@ -51,6 +52,7 @@ export default function ReportePracticante() {
   const [importeManualStr, setImporteManualStr] = useState('')
   const [importeManual, setImporteManual] = useState(false)
   const [loadingData, setLoadingData] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
   const [logoBase64, setLogoBase64] = useState<string | undefined>()
 
   useEffect(() => {
@@ -70,9 +72,8 @@ export default function ReportePracticante() {
 
   const selectedPracticante = practicantes.find(p => p.id === selectedId)
 
-  const loadData = useCallback(async () => {
+  const refreshBreakdown = useCallback(async (keepManual = true) => {
     if (!selectedId) return
-    setLoadingData(true)
     const { from, to } = getQuincenaRange(year, month, quincena)
     const records = await getAccessRecordsForPeriod(selectedId, from, to)
     const daysInPeriod = getDaysInQuincena(year, month, quincena)
@@ -82,12 +83,53 @@ export default function ReportePracticante() {
     setTotalHoras(total)
     const calc = total * tarifa
     setImporteCalc(calc)
-    setImporteManualStr('')
-    setImporteManual(false)
-    setLoadingData(false)
+    if (!keepManual) {
+      setImporteManualStr('')
+      setImporteManual(false)
+    }
   }, [selectedId, year, month, quincena, tarifa])
 
+  const loadData = useCallback(async () => {
+    if (!selectedId) {
+      setDays([])
+      setTotalHoras(0)
+      setImporteCalc(0)
+      return
+    }
+    setLoadingData(true)
+    setEditError(null)
+    await refreshBreakdown(false)
+    setLoadingData(false)
+  }, [selectedId, refreshBreakdown])
+
   useEffect(() => { loadData() }, [loadData])
+
+  const handleTimeSaved = async (id: string, newTime: string) => {
+    setEditError(null)
+    // Optimistic update
+    setDays(prev => prev.map(d => {
+      if (d.entryId === id) return { ...d, entryTime: newTime, entryEditedAt: new Date().toISOString() }
+      if (d.exitId === id) return { ...d, exitTime: newTime, exitEditedAt: new Date().toISOString() }
+      return d
+    }))
+    await refreshBreakdown(true)
+  }
+
+  const handleMovCreated = async (dateKey: string, movement: 'ENTRY' | 'EXIT', newTime: string, newId: string) => {
+    setEditError(null)
+    // Optimistic update
+    setDays(prev => prev.map(d => {
+      if (d.dateKey === dateKey) {
+        if (movement === 'ENTRY') {
+          return { ...d, entryId: newId, entryTime: newTime, entryEditedAt: new Date().toISOString() }
+        } else {
+          return { ...d, exitId: newId, exitTime: newTime, exitEditedAt: new Date().toISOString() }
+        }
+      }
+      return d
+    }))
+    await refreshBreakdown(true)
+  }
 
   const importeFinal = importeManual && importeManualStr !== ''
     ? parseFloat(importeManualStr) || 0
@@ -260,36 +302,91 @@ export default function ReportePracticante() {
       </div>
 
       {hasData && !loadingData && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/60">
-            <h2 className="text-sm font-semibold text-slate-700">Desglose — {quincenaLabel}</h2>
-          </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-slate-800 text-white">
-                <th className="text-left px-4 py-2 text-xs font-semibold">Fecha</th>
-                <th className="text-center px-4 py-2 text-xs font-semibold">Entrada</th>
-                <th className="text-center px-4 py-2 text-xs font-semibold">Salida</th>
-                <th className="text-center px-4 py-2 text-xs font-semibold">Horas redondeadas</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {days.map((d, i) => (
-                <tr key={d.dateKey} className={i % 2 === 0 ? '' : 'bg-slate-50/60'}>
-                  <td className="px-4 py-2 text-xs">{d.dateLabel}</td>
-                  <td className="px-4 py-2 text-xs font-mono text-center">{d.entryTime ?? '—'}</td>
-                  <td className="px-4 py-2 text-xs font-mono text-center">{d.exitTime ?? '—'}</td>
-                  <td className="px-4 py-2 text-xs font-bold text-center">{d.horasRedondeadas}</td>
+        <div className="space-y-3">
+          {editError && (
+            <div className="flex items-center gap-2 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-4 py-2.5 shadow-sm">
+              <AlertCircle size={14} className="flex-shrink-0" />
+              <span>{editError}</span>
+              <button
+                onClick={() => setEditError(null)}
+                className="ml-auto text-rose-400 hover:text-rose-600 cursor-pointer"
+                title="Cerrar advertencia"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-5 py-3 border-b border-slate-100 bg-slate-50/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
+              <h2 className="text-sm font-semibold text-slate-700">Desglose — {quincenaLabel}</h2>
+              <p className="text-xs text-slate-400">
+                💡 Haz clic en una hora o en <span className="font-mono text-slate-500">—</span> para editar o registrar
+              </p>
+            </div>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-800 text-white">
+                  <th className="text-left px-4 py-2 text-xs font-semibold">Fecha</th>
+                  <th className="text-center px-4 py-2 text-xs font-semibold">Entrada</th>
+                  <th className="text-center px-4 py-2 text-xs font-semibold">Salida</th>
+                  <th className="text-center px-4 py-2 text-xs font-semibold">Horas redondeadas</th>
                 </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-slate-800 text-white">
-                <td colSpan={3} className="px-4 py-2 text-xs font-bold">TOTAL</td>
-                <td className="px-4 py-2 text-xs font-bold text-center">{totalHoras} hrs.</td>
-              </tr>
-            </tfoot>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {days.map((d, i) => (
+                  <tr key={d.dateKey} className={i % 2 === 0 ? '' : 'bg-slate-50/60'}>
+                    <td className="px-4 py-2 text-xs">{d.dateLabel}</td>
+                    <td className="px-4 py-2 text-xs font-mono text-center">
+                      {d.entryId && d.entryTime ? (
+                        <InlineTime
+                          id={d.entryId}
+                          time={d.entryTime}
+                          editedAt={d.entryEditedAt}
+                          onSaved={handleTimeSaved}
+                          onError={setEditError}
+                        />
+                      ) : (
+                        <InlineCreate
+                          personId={selectedId}
+                          dateKey={d.dateKey}
+                          movement="ENTRY"
+                          onCreated={handleMovCreated}
+                          onError={setEditError}
+                        />
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-xs font-mono text-center">
+                      {d.exitId && d.exitTime ? (
+                        <InlineTime
+                          id={d.exitId}
+                          time={d.exitTime}
+                          editedAt={d.exitEditedAt}
+                          onSaved={handleTimeSaved}
+                          onError={setEditError}
+                        />
+                      ) : (
+                        <InlineCreate
+                          personId={selectedId}
+                          dateKey={d.dateKey}
+                          movement="EXIT"
+                          onCreated={handleMovCreated}
+                          onError={setEditError}
+                        />
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-xs font-bold text-center">{d.horasRedondeadas}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-800 text-white">
+                  <td colSpan={3} className="px-4 py-2 text-xs font-bold">TOTAL</td>
+                  <td className="px-4 py-2 text-xs font-bold text-center">{totalHoras} hrs.</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
 

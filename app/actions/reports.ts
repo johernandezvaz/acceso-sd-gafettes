@@ -29,7 +29,11 @@ export interface DayBreakdown {
   dateKey: string
   dateLabel: string
   entryTime: string | null
+  entryId?: string | null
+  entryEditedAt?: string | null
   exitTime: string | null
+  exitId?: string | null
+  exitEditedAt?: string | null
   horasDecimal: number
   horasRedondeadas: number
 }

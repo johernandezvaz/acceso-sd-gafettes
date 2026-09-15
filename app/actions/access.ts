@@ -112,14 +112,14 @@ export async function updateAccessRecordTimestamp(
   }
 
   const [hh, mm] = newTime.split(':').map(Number)
-  const newTimestamp = new Date(record.timestamp)
-  newTimestamp.setHours(hh, mm, 0, 0)
+  const year = record.timestamp.getFullYear()
+  const month = record.timestamp.getMonth()
+  const day = record.timestamp.getDate()
+  const dayStart = new Date(year, month, day, 0, 0, 0, 0)
+  const dayEnd = new Date(year, month, day, 23, 59, 59, 999)
+  const newTimestamp = new Date(year, month, day, hh, mm, 0, 0)
 
   if (record.movement === 'EXIT') {
-    const dateStr = record.timestamp.toISOString().split('T')[0]
-    const dayStart = new Date(`${dateStr}T00:00:00.000`)
-    const dayEnd = new Date(`${dateStr}T23:59:59.999`)
-
     const lastEntry = await prisma.accessRecord.findFirst({
       where: {
         personId: record.personId,
@@ -135,10 +135,6 @@ export async function updateAccessRecordTimestamp(
   }
 
   if (record.movement === 'ENTRY') {
-    const dateStr = record.timestamp.toISOString().split('T')[0]
-    const dayStart = new Date(`${dateStr}T00:00:00.000`)
-    const dayEnd = new Date(`${dateStr}T23:59:59.999`)
-
     const nextExit = await prisma.accessRecord.findFirst({
       where: {
         personId: record.personId,

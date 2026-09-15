@@ -39,21 +39,32 @@ export function buildDayBreakdown(
     const label = toLocalDateLabel(dateKey)
 
     if (dayRecords.length === 0) {
-      return { dateKey, dateLabel: label, entryTime: null, exitTime: null, horasDecimal: 0, horasRedondeadas: 0 }
+      return {
+        dateKey,
+        dateLabel: label,
+        entryTime: null,
+        entryId: null,
+        entryEditedAt: null,
+        exitTime: null,
+        exitId: null,
+        exitEditedAt: null,
+        horasDecimal: 0,
+        horasRedondeadas: 0,
+      }
     }
 
-    let firstEntry: Date | null = null
-    let lastExit: Date | null = null
+    let firstEntryRecord: RawAccessRecord | null = null
+    let lastExitRecord: RawAccessRecord | null = null
     let totalMs = 0
     let openEntry: Date | null = null
 
     for (const r of dayRecords) {
       const t = new Date(r.timestamp)
       if (r.movement === 'ENTRY') {
-        if (!firstEntry) firstEntry = t
+        if (!firstEntryRecord) firstEntryRecord = r
         if (!openEntry) openEntry = t
       } else {
-        lastExit = t
+        lastExitRecord = r
         if (openEntry) {
           const diff = t.getTime() - openEntry.getTime()
           if (diff > 0) totalMs += diff
@@ -68,8 +79,12 @@ export function buildDayBreakdown(
     return {
       dateKey,
       dateLabel: label,
-      entryTime: firstEntry ? toLocalTime(firstEntry) : null,
-      exitTime: lastExit ? toLocalTime(lastExit) : null,
+      entryTime: firstEntryRecord ? toLocalTime(new Date(firstEntryRecord.timestamp)) : null,
+      entryId: firstEntryRecord?.id ?? null,
+      entryEditedAt: firstEntryRecord?.editedAt ?? null,
+      exitTime: lastExitRecord ? toLocalTime(new Date(lastExitRecord.timestamp)) : null,
+      exitId: lastExitRecord?.id ?? null,
+      exitEditedAt: lastExitRecord?.editedAt ?? null,
       horasDecimal,
       horasRedondeadas,
     }
