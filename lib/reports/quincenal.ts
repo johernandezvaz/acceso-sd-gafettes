@@ -1,4 +1,4 @@
-export type Quincena = 1 | 2
+export type Quincena = 0 | 1 | 2  // 0 = mensual completo
 
 export interface QuincenaRange {
   from: Date
@@ -6,13 +6,18 @@ export interface QuincenaRange {
 }
 
 export function getQuincenaRange(year: number, month: number, quincena: Quincena): QuincenaRange {
-  if (quincena === 1) {
+  if (quincena === 0) {
+
+    const from = new Date(year, month, 1, 0, 0, 0, 0)
+    const lastDay = new Date(year, month + 1, 0).getDate()
+    const to = new Date(year, month, lastDay, 23, 59, 59, 999)
+    return { from, to }
+  } else if (quincena === 1) {
     const from = new Date(year, month, 1, 0, 0, 0, 0)
     const to = new Date(year, month, 15, 23, 59, 59, 999)
     return { from, to }
   } else {
     const from = new Date(year, month, 16, 0, 0, 0, 0)
-
     const lastDay = new Date(year, month + 1, 0).getDate()
     const to = new Date(year, month, lastDay, 23, 59, 59, 999)
     return { from, to }
@@ -27,6 +32,7 @@ const MESES = [
 
 export function getQuincenaLabel(year: number, month: number, quincena: Quincena): string {
   const mesNombre = MESES[month] ?? 'Mes desconocido'
+  if (quincena === 0) return `Mensual — ${mesNombre} ${year}`
   const ordinal = quincena === 1 ? '1ª' : '2ª'
   return `${ordinal} Quincena — ${mesNombre} ${year}`
 }
@@ -53,3 +59,6 @@ export function getDaysInQuincena(year: number, month: number, quincena: Quincen
   }
   return days
 }
+
+// Alias semántico para uso mensual
+export const getDaysInPeriod = getDaysInQuincena

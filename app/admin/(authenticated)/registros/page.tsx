@@ -5,13 +5,14 @@ import {
   getDailyAccessRecords,
   updateAccessRecordTimestamp,
   createAccessRecordForDate,
+  deleteAccessRecordsForDay,
   type DailyAccessRecordRow,
   type DailyMovementItem,
 } from '@/app/actions/access'
 import { getPersonTypes, type PersonTypeOption } from '@/app/actions/people'
 import {
   Search, X, Calendar, ChevronLeft, ChevronRight,
-  AlertCircle, CheckCircle2, Timer, Check, Ban,
+  AlertCircle, CheckCircle2, Timer, Check, Ban, Trash2,
 } from 'lucide-react'
 
 const TYPE_COLORS: Record<string, string> = {
@@ -303,6 +304,20 @@ export default function AdminRegistrosPage() {
     }))
   }
 
+  const handleDeleteDayRow = async (row: DailyAccessRecordRow) => {
+    const ok = window.confirm(`¿Eliminar todos los registros de ${row.personName} del ${row.formattedDate}? Esta acción no se puede deshacer.`)
+    if (!ok) return
+    setEditError(null)
+    const result = await deleteAccessRecordsForDay(row.personId, row.dateKey)
+    if (!result.success) {
+      setEditError(result.error ?? 'Error al eliminar registros')
+      return
+    }
+    // Remove row from list
+    setRows(prev => prev.filter(r => r.id !== row.id))
+    setTotalCount(prev => Math.max(0, prev - 1))
+  }
+
   return (
     <div className="max-w-6xl mx-auto">
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -412,6 +427,7 @@ export default function AdminRegistrosPage() {
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Salida</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Total</th>
                 <th className="text-left px-5 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Estado</th>
+                <th className="px-5 py-3 w-10"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -481,6 +497,17 @@ export default function AdminRegistrosPage() {
                         {row.status === 'COMPLETED' ? <CheckCircle2 size={12} /> : row.status === 'IN_PROGRESS' ? <Timer size={12} /> : <AlertCircle size={12} />}
                         {row.status === 'COMPLETED' ? 'Completo' : row.status === 'IN_PROGRESS' ? 'En curso' : 'Inconsistente'}
                       </span>
+                    </td>
+                    <td className="px-3 py-3.5 text-center">
+                      {editable && (
+                        <button
+                          onClick={() => handleDeleteDayRow(row)}
+                          title="Eliminar todos los registros de este día"
+                          className="p-1.5 rounded-lg text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

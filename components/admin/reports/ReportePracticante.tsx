@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { PDFDownloadLink } from '@react-pdf/renderer'
-import { FileDown, Calculator, AlertTriangle, User, Calendar, AlertCircle, X } from 'lucide-react'
+import { FileDown, Calculator, AlertTriangle, User, Calendar, AlertCircle, X, Trash2 } from 'lucide-react'
 import {
   getActivePracticantes,
   getAccessRecordsForPeriod,
@@ -10,6 +10,7 @@ import {
   type PracticanteOption,
   type DayBreakdown,
 } from '@/app/actions/reports'
+import { deleteAccessRecordsForDay } from '@/app/actions/access'
 import { buildDayBreakdown } from '@/lib/reports/breakdown'
 import {
   getQuincenaRange,
@@ -132,6 +133,30 @@ export default function ReportePracticante() {
     await refreshBreakdown(true)
   }
 
+  const handleDeleteDay = async (dateKey: string) => {
+    if (!selectedId) return
+    const confirm = window.confirm(`¿Eliminar todos los registros del ${dateKey}? Esta acción no se puede deshacer.`)
+    if (!confirm) return
+    setEditError(null)
+    const result = await deleteAccessRecordsForDay(selectedId, dateKey)
+    if (!result.success) {
+      setEditError(result.error ?? 'Error al eliminar registros')
+      return
+    }
+
+    setDays(prev => {
+      const updated = prev.map(d =>
+        d.dateKey === dateKey
+          ? { ...d, entryId: null, entryTime: null, entryEditedAt: null, exitId: null, exitTime: null, exitEditedAt: null, horasDecimal: 0, horasRedondeadas: 0 }
+          : d
+      )
+      const total = updated.reduce((s, d) => s + d.horasRedondeadas, 0)
+      setTotalHoras(total)
+      setImporteCalc(total * tarifa)
+      return updated
+    })
+  }
+
   const handleMovCreated = async (dateKey: string, movement: 'ENTRY' | 'EXIT', newTime: string, newId: string) => {
     setEditError(null)
 
@@ -222,10 +247,11 @@ export default function ReportePracticante() {
               </select>
             </div>
             <div>
-              <label className={labelCls}>Quincena</label>
+              <label className={labelCls}>Período</label>
               <select value={quincena} onChange={e => setQuincena(Number(e.target.value) as Quincena)} className={inputCls}>
-                <option value={1}>1ª</option>
-                <option value={2}>2ª</option>
+                <option value={1}>1ª Quincena</option>
+                <option value={2}>2ª Quincena</option>
+                <option value={0}>Mensual</option>
               </select>
             </div>
           </div>
@@ -361,57 +387,72 @@ export default function ReportePracticante() {
                   <th className="text-center px-4 py-2 text-xs font-semibold">Entrada</th>
                   <th className="text-center px-4 py-2 text-xs font-semibold">Salida</th>
                   <th className="text-center px-4 py-2 text-xs font-semibold">Horas redondeadas</th>
+                  <th className="text-center px-4 py-2 text-xs font-semibold w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {days.map((d, i) => (
-                  <tr key={d.dateKey} className={i % 2 === 0 ? '' : 'bg-slate-50/60'}>
-                    <td className="px-4 py-2 text-xs">{d.dateLabel}</td>
-                    <td className="px-4 py-2 text-xs font-mono text-center">
-                      {d.entryId && d.entryTime ? (
-                        <InlineTime
-                          id={d.entryId}
-                          time={d.entryTime}
-                          editedAt={d.entryEditedAt}
-                          onSaved={handleTimeSaved}
-                          onError={setEditError}
-                        />
-                      ) : (
-                        <InlineCreate
-                          personId={selectedId}
-                          dateKey={d.dateKey}
-                          movement="ENTRY"
-                          onCreated={handleMovCreated}
-                          onError={setEditError}
-                        />
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-xs font-mono text-center">
-                      {d.exitId && d.exitTime ? (
-                        <InlineTime
-                          id={d.exitId}
-                          time={d.exitTime}
-                          editedAt={d.exitEditedAt}
-                          onSaved={handleTimeSaved}
-                          onError={setEditError}
-                        />
-                      ) : (
-                        <InlineCreate
-                          personId={selectedId}
-                          dateKey={d.dateKey}
-                          movement="EXIT"
-                          onCreated={handleMovCreated}
-                          onError={setEditError}
-                        />
-                      )}
-                    </td>
-                    <td className="px-4 py-2 text-xs font-bold text-center">{d.horasRedondeadas}</td>
-                  </tr>
-                ))}
+                {days.map((d, i) => {
+                  const hasRecords = !!(d.entryId || d.exitId)
+                  return (
+                    <tr key={d.dateKey} className={i % 2 === 0 ? '' : 'bg-slate-50/60'}>
+                      <td className="px-4 py-2 text-xs">{d.dateLabel}</td>
+                      <td className="px-4 py-2 text-xs font-mono text-center">
+                        {d.entryId && d.entryTime ? (
+                          <InlineTime
+                            id={d.entryId}
+                            time={d.entryTime}
+                            editedAt={d.entryEditedAt}
+                            onSaved={handleTimeSaved}
+                            onError={setEditError}
+                          />
+                        ) : (
+                          <InlineCreate
+                            personId={selectedId}
+                            dateKey={d.dateKey}
+                            movement="ENTRY"
+                            onCreated={handleMovCreated}
+                            onError={setEditError}
+                          />
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-xs font-mono text-center">
+                        {d.exitId && d.exitTime ? (
+                          <InlineTime
+                            id={d.exitId}
+                            time={d.exitTime}
+                            editedAt={d.exitEditedAt}
+                            onSaved={handleTimeSaved}
+                            onError={setEditError}
+                          />
+                        ) : (
+                          <InlineCreate
+                            personId={selectedId}
+                            dateKey={d.dateKey}
+                            movement="EXIT"
+                            onCreated={handleMovCreated}
+                            onError={setEditError}
+                          />
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-xs font-bold text-center">{d.horasRedondeadas}</td>
+                      <td className="px-2 py-2 text-center">
+                        {hasRecords && (
+                          <button
+                            onClick={() => handleDeleteDay(d.dateKey)}
+                            title="Eliminar todos los registros de este día"
+                            className="p-1 rounded-md text-slate-300 hover:text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
               <tfoot>
                 <tr className="bg-slate-800 text-white">
-                  <td colSpan={3} className="px-4 py-2 text-xs font-bold">TOTAL</td>
+                  <td colSpan={4} className="px-4 py-2 text-xs font-bold">TOTAL</td>
                   <td className="px-4 py-2 text-xs font-bold text-center">{totalHoras} hrs.</td>
                 </tr>
               </tfoot>

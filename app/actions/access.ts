@@ -96,6 +96,42 @@ export async function createAccessRecordForDate(
   return { success: true, id: record.id }
 }
 
+export async function deleteAccessRecordsForDay(
+  personId: string,
+  dateKey: string,
+): Promise<{ success: boolean; error?: string; deletedCount?: number }> {
+  const session = await requireAuth()
+
+  const [year, month, day] = dateKey.split('-').map(Number)
+  const dayStart = new Date(year, month - 1, day, 0, 0, 0, 0)
+  const dayEnd = new Date(year, month - 1, day, 23, 59, 59, 999)
+
+  const existing = await prisma.accessRecord.findMany({
+    where: { personId, timestamp: { gte: dayStart, lte: dayEnd } },
+    select: { id: true },
+  })
+
+  if (existing.length === 0) {
+    return { success: true, deletedCount: 0 }
+  }
+
+  const ids = existing.map(r => r.id)
+
+  await prisma.accessRecord.deleteMany({
+    where: { id: { in: ids } },
+  })
+
+  await logAction(session.adminId, 'DELETE_ACCESS_RECORDS_DAY', 'AccessRecord', undefined, {
+    personId,
+    dateKey,
+    deletedIds: ids,
+    deletedCount: ids.length,
+    editedBy: session.email,
+  })
+
+  return { success: true, deletedCount: ids.length }
+}
+
 export async function updateAccessRecordTimestamp(
   recordId: string,
   newTime: string
