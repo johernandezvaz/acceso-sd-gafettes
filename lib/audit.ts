@@ -25,6 +25,7 @@ export type AuditAction =
   | 'LOGIN'
   | 'EDIT_ACCESS_RECORD'
   | 'EDIT_REPORT_AMOUNT'
+  | 'DELETE_ACCESS_RECORDS_DAY'
 
 export async function logAction(
   adminUserId: string,
