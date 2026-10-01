@@ -10,6 +10,7 @@ export interface PersonOption {
   fullName: string
   personTypeName: string
   personTypeSlug: string
+  university?: string | null
   scheduleEntry?: string | null
   scheduleExit?: string | null
   paymentFrequency?: PaymentFrequency | null
@@ -40,6 +41,7 @@ export async function getActivePeople(personTypeSlug?: string): Promise<PersonOp
     fullName: p.fullName,
     personTypeName: p.personType.name,
     personTypeSlug: p.personType.slug,
+    university: p.university,
     scheduleEntry: p.scheduleEntry,
     scheduleExit: p.scheduleExit,
     paymentFrequency: p.paymentFrequency,
@@ -57,6 +59,7 @@ export async function getPersonTypes(): Promise<PersonTypeOption[]> {
 export async function createPerson(data: {
   fullName: string
   personTypeId: string
+  university?: string | null
   scheduleEntry?: string | null
   scheduleExit?: string | null
   paymentFrequency?: 'SEMANAL' | 'QUINCENAL' | 'MENSUAL' | null
@@ -82,6 +85,7 @@ export async function createPerson(data: {
     data: {
       fullName,
       personTypeId: data.personTypeId,
+      university: data.university?.trim() || null,
       scheduleEntry: sEntry,
       scheduleExit: sExit,
       paymentFrequency: data.paymentFrequency ? (data.paymentFrequency as PaymentFrequency) : 'QUINCENAL',
@@ -92,6 +96,7 @@ export async function createPerson(data: {
   await logAction(session.adminId, 'CREATE_PERSON', 'Person', person.id, {
     fullName: person.fullName,
     personType: person.personType.name,
+    university: person.university,
     scheduleEntry: person.scheduleEntry,
     scheduleExit: person.scheduleExit,
     paymentFrequency: person.paymentFrequency,
@@ -105,6 +110,7 @@ export async function updatePerson(
   data: {
     fullName?: string
     personTypeId?: string
+    university?: string | null
     scheduleEntry?: string | null
     scheduleExit?: string | null
     paymentFrequency?: 'SEMANAL' | 'QUINCENAL' | 'MENSUAL' | null
@@ -121,6 +127,7 @@ export async function updatePerson(
   const updateData: {
     fullName?: string
     personTypeId?: string
+    university?: string | null
     scheduleEntry?: string | null
     scheduleExit?: string | null
     paymentFrequency?: PaymentFrequency | null
@@ -134,6 +141,9 @@ export async function updatePerson(
   }
   if (data.personTypeId !== undefined) {
     updateData.personTypeId = data.personTypeId
+  }
+  if (data.university !== undefined) {
+    updateData.university = data.university?.trim() || null
   }
   if (data.scheduleEntry !== undefined) {
     const sEntry = data.scheduleEntry?.trim() || null
@@ -167,6 +177,7 @@ export async function updatePerson(
       fullName: before.fullName,
       active: before.active,
       personType: before.personType.name,
+      university: before.university,
       scheduleEntry: before.scheduleEntry,
       scheduleExit: before.scheduleExit,
       paymentFrequency: before.paymentFrequency,

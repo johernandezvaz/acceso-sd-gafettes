@@ -74,6 +74,7 @@ model Person {
   id               String            @id @default(cuid())
   fullName         String            @map("full_name")
   personTypeId     String            @map("person_type_id")
+  university       String?           // Universidad de procedencia (practicantes)
   scheduleEntry    String?           @map("schedule_entry")    // HH:mm ej. "08:00"
   scheduleExit     String?           @map("schedule_exit")     // HH:mm ej. "17:00"
   paymentFrequency PaymentFrequency? @default(QUINCENAL) @map("payment_frequency")

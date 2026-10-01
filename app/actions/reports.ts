@@ -8,6 +8,7 @@ import { logAction } from '@/lib/audit'
 export interface PracticanteOption {
   id: string
   fullName: string
+  university?: string | null
 }
 
 export interface PersonForReport {
@@ -54,7 +55,7 @@ export async function getActivePracticantes(): Promise<PracticanteOption[]> {
     include: { personType: true },
     orderBy: { fullName: 'asc' },
   })
-  return people.map((p) => ({ id: p.id, fullName: p.fullName }))
+  return people.map((p) => ({ id: p.id, fullName: p.fullName, university: p.university }))
 }
 
 

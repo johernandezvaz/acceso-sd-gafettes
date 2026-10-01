@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, CircleCheck, CircleArrowOutUpRight, AlertCircle } from 'lucide-react';
+import { X, CircleCheck, CircleArrowOutUpRight, AlertCircle, CreditCard } from 'lucide-react';
 import PersonCombobox from '@/components/admin/PersonCombobox';
 import { getActivePeople, type PersonOption } from '@/app/actions/people';
 import { registerAccess } from '@/app/actions/access';
@@ -163,6 +163,23 @@ export default function RegistroGeneralModal({
                 />
               )}
             </div>
+
+            {/* Badge de frecuencia de pago (visible al seleccionar) */}
+            {selectedPerson?.paymentFrequency && (
+              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-50 border border-slate-200">
+                <CreditCard size={14} className="text-slate-400 flex-shrink-0" />
+                <span className="text-xs text-slate-500">
+                  Pago{' '}
+                  <span className="font-semibold text-slate-700">
+                    {selectedPerson.paymentFrequency === 'MENSUAL'
+                      ? 'Mensual'
+                      : selectedPerson.paymentFrequency === 'QUINCENAL'
+                      ? 'Quincenal'
+                      : 'Semanal'}
+                  </span>
+                </span>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">

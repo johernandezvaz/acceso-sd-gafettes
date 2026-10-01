@@ -39,6 +39,7 @@ export default function ReportePracticante() {
 
   const [titulo, setTitulo] = useState('SOLICITUD DE TRANSFERENCIA')
   const [beneficiario, setBeneficiario] = useState('')
+  const [beneficiarioFromUniversity, setBeneficiarioFromUniversity] = useState(false)
   const [concepto, setConcepto] = useState('BECA PRACTICAS PROFESIONALES')
   const [solicitadoPor, setSolicitadoPor] = useState('IVETT MELENDEZ')
   const [autorizadoPor1, setAutorizadoPor1] = useState('ERIC ALEXANDRE')
@@ -71,6 +72,22 @@ export default function ReportePracticante() {
   }, [])
 
   const selectedPracticante = practicantes.find(p => p.id === selectedId)
+
+  const handleSelectPracticante = useCallback((id: string) => {
+    setSelectedId(id)
+    if (!id) {
+      setBeneficiario('')
+      setBeneficiarioFromUniversity(false)
+      return
+    }
+    const practicante = practicantes.find(p => p.id === id)
+    if (practicante?.university) {
+      setBeneficiario(practicante.university)
+      setBeneficiarioFromUniversity(true)
+    } else {
+      setBeneficiarioFromUniversity(false)
+    }
+  }, [practicantes])
 
   const refreshBreakdown = useCallback(async (keepManual = true) => {
     if (!selectedId) return
@@ -106,7 +123,7 @@ export default function ReportePracticante() {
 
   const handleTimeSaved = async (id: string, newTime: string) => {
     setEditError(null)
-    // Optimistic update
+
     setDays(prev => prev.map(d => {
       if (d.entryId === id) return { ...d, entryTime: newTime, entryEditedAt: new Date().toISOString() }
       if (d.exitId === id) return { ...d, exitTime: newTime, exitEditedAt: new Date().toISOString() }
@@ -117,7 +134,7 @@ export default function ReportePracticante() {
 
   const handleMovCreated = async (dateKey: string, movement: 'ENTRY' | 'EXIT', newTime: string, newId: string) => {
     setEditError(null)
-    // Optimistic update
+
     setDays(prev => prev.map(d => {
       if (d.dateKey === dateKey) {
         if (movement === 'ENTRY') {
@@ -186,7 +203,7 @@ export default function ReportePracticante() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="sm:col-span-2">
             <label className={labelCls}>Practicante</label>
-            <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className={inputCls}>
+            <select value={selectedId} onChange={e => handleSelectPracticante(e.target.value)} className={inputCls}>
               <option value="">— Selecciona un practicante —</option>
               {practicantes.map(p => <option key={p.id} value={p.id}>{p.fullName}</option>)}
             </select>
@@ -225,8 +242,21 @@ export default function ReportePracticante() {
             <input type="text" value={titulo} onChange={e => setTitulo(e.target.value)} className={inputCls} placeholder="SOLICITUD DE TRANSFERENCIA" />
           </div>
           <div>
-            <label className={labelCls}>Beneficiario</label>
-            <input type="text" value={beneficiario} onChange={e => setBeneficiario(e.target.value)} className={inputCls} placeholder="Nombre del beneficiario" />
+            <label className={labelCls}>
+              Beneficiario
+              {beneficiarioFromUniversity && (
+                <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-emerald-700 bg-emerald-50 border border-emerald-200 font-normal normal-case tracking-normal" style={{ fontSize: '10px' }}>
+                  ✓ Auto: universidad
+                </span>
+              )}
+            </label>
+            <input
+              type="text"
+              value={beneficiario}
+              onChange={e => { setBeneficiario(e.target.value); setBeneficiarioFromUniversity(false) }}
+              className={inputCls}
+              placeholder="Nombre del beneficiario"
+            />
           </div>
           <div>
             <label className={labelCls}>Alumno (automático)</label>

@@ -8,7 +8,7 @@ import {
   updatePerson,
   type PersonTypeOption,
 } from '@/app/actions/people'
-import { Plus, Search, ChevronDown, X, Check, AlertCircle, Pencil, Clock, CreditCard } from 'lucide-react'
+import { Plus, Search, ChevronDown, X, Check, AlertCircle, Pencil, Clock, CreditCard, GraduationCap } from 'lucide-react'
 
 type Person = Awaited<ReturnType<typeof listPeople>>[number]
 
@@ -122,6 +122,7 @@ export default function AdminPersonalPage() {
               <tr className="border-b border-slate-100 bg-slate-50/50">
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Nombre</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Tipo</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Universidad</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Horario</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Pago</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 uppercase tracking-widest">Estado</th>
@@ -136,6 +137,20 @@ export default function AdminPersonalPage() {
                     <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold ${getTypeColor(p.personType.slug)}`}>
                       {p.personType.name}
                     </span>
+                  </td>
+                  <td className="px-6 py-3.5 text-slate-600 text-xs">
+                    {p.personType.slug === 'practicantes' ? (
+                      p.university ? (
+                        <span className="inline-flex items-center gap-1 text-sky-700 font-medium">
+                          <GraduationCap size={12} className="text-sky-400" />
+                          {p.university}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 italic text-xs">Sin universidad</span>
+                      )
+                    ) : (
+                      <span className="text-slate-300">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-3.5 text-slate-600 text-xs">
                     {p.scheduleEntry && p.scheduleExit ? (
@@ -196,13 +211,14 @@ export default function AdminPersonalPage() {
 
       {showModal && (
         <PersonModal
-          types={types}
-          person={editPerson}
-          onClose={() => setShowModal(false)}
-          onSaved={async () => { setShowModal(false); await load() }}
-        />
-      )}
-    </div>
+        types={types}
+        person={editPerson}
+        onClose={() => setShowModal(false)}
+        onSaved={async () => { setShowModal(false); await load() }}
+      />
+    )
+  }
+    </div >
   )
 }
 
@@ -216,6 +232,7 @@ interface PersonModalProps {
 function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
   const [fullName, setFullName] = useState(person?.fullName ?? '')
   const [personTypeId, setTypeId] = useState(person?.personTypeId ?? '')
+  const [university, setUniversity] = useState(person?.university ?? '')
   const [scheduleEntry, setScheduleEntry] = useState(person?.scheduleEntry ?? '')
   const [scheduleExit, setScheduleExit] = useState(person?.scheduleExit ?? '')
   const [paymentFrequency, setPaymentFrequency] = useState<'SEMANAL' | 'QUINCENAL' | 'MENSUAL'>(
@@ -223,6 +240,9 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
   )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  const selectedType = types.find((t) => t.id === personTypeId)
+  const isPracticante = selectedType?.slug === 'practicantes'
 
   const handleTypeChange = (selectedTypeId: string) => {
     setTypeId(selectedTypeId)
@@ -245,6 +265,7 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
     const payload = {
       fullName: fullName.trim(),
       personTypeId,
+      university: university.trim() || null,
       scheduleEntry: scheduleEntry.trim() || null,
       scheduleExit: scheduleExit.trim() || null,
       paymentFrequency,
@@ -307,6 +328,25 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
             </div>
           </div>
 
+          {isPracticante && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <GraduationCap size={14} className="text-sky-500" />
+                Universidad de procedencia
+              </label>
+              <input
+                type="text"
+                value={university}
+                onChange={(e) => { setUniversity(e.target.value); setError(null) }}
+                placeholder="Ej. Universidad Autónoma de Chihuahua"
+                className="w-full h-11 px-4 rounded-xl border-2 border-slate-200 bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20 transition-colors text-sm"
+              />
+              <p className="text-xs text-slate-400 mt-1">
+                Se usará como &quot;Beneficiario&quot; al generar reportes de pago.
+              </p>
+            </div>
+          )}
+
           {/* Horario */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
             <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider flex items-center gap-1.5">
@@ -335,13 +375,12 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
             </div>
           </div>
 
-          {/* Periodicidad de Pago */}
           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80">
             <label className="block text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider flex items-center gap-1.5">
               <CreditCard size={13} className="text-emerald-600" />
               Periodicidad de pago
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className={`grid gap-2 ${isPracticante ? 'grid-cols-2' : 'grid-cols-3'}`}>
               <label
                 className={`
                   flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all text-xs
@@ -380,24 +419,26 @@ function PersonModal({ types, person, onClose, onSaved }: PersonModalProps) {
                 <span>Quincenal</span>
               </label>
 
-              <label
-                className={`
-                  flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all text-xs
-                  ${paymentFrequency === 'SEMANAL'
-                    ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold shadow-xs'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/60 font-medium'}
-                `}
-              >
-                <input
-                  type="radio"
-                  name="paymentFrequency"
-                  value="SEMANAL"
-                  checked={paymentFrequency === 'SEMANAL'}
-                  onChange={() => setPaymentFrequency('SEMANAL')}
-                  className="text-blue-600 focus:ring-blue-500"
-                />
-                <span>Semanal</span>
-              </label>
+              {!isPracticante && (
+                <label
+                  className={`
+                    flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all text-xs
+                    ${paymentFrequency === 'SEMANAL'
+                      ? 'border-blue-600 bg-blue-50/50 text-blue-900 font-semibold shadow-xs'
+                      : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100/60 font-medium'}
+                  `}
+                >
+                  <input
+                    type="radio"
+                    name="paymentFrequency"
+                    value="SEMANAL"
+                    checked={paymentFrequency === 'SEMANAL'}
+                    onChange={() => setPaymentFrequency('SEMANAL')}
+                    className="text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Semanal</span>
+                </label>
+              )}
             </div>
           </div>
 
